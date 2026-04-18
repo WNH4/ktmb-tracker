@@ -4,7 +4,11 @@ import requests
 
 import re
 
-import time
+# ======================
+
+# CONFIG
+
+# ======================
 
 BOT_TOKEN = "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM"
 CHAT_ID = "8240067274"
@@ -19,15 +23,33 @@ TIME_START = "21:00"
 
 TIME_END = "21:20"
 
+# ======================
+
+# TELEGRAM
+
+# ======================
+
 def send(msg):
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
     requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
 
+# ======================
+
+# TIME FILTER
+
+# ======================
+
 def in_range(t):
 
     return TIME_START <= t <= TIME_END
+
+# ======================
+
+# MAIN BOT
+
+# ======================
 
 def run():
 
@@ -37,105 +59,135 @@ def run():
 
         page = browser.new_page()
 
-        # ------------------------
+        # ----------------------
 
-        # LOAD SITE
+        # OPEN KTMB
 
-        # ------------------------
+        # ----------------------
 
-        page.goto("https://online.ktmb.com.my")
+        page.goto("https://online.ktmb.com.my", wait_until="domcontentloaded")
 
-        page.wait_for_timeout(5000)
+        page.wait_for_timeout(8000)
 
-        # ------------------------
+        # ----------------------
 
-        # INPUT FLOW (locked)
+        # HANDLE POPUPS (if any)
 
-        # ------------------------
+        # ----------------------
 
-        page.fill("input[placeholder*='From']", FROM_STATION)
+        try:
+
+            page.click("text=Accept", timeout=3000)
+
+        except:
+
+            pass
+
+        # ----------------------
+
+        # FROM (dropdown select)
+
+        # ----------------------
+
+        from_input = page.get_by_placeholder("From")
+
+        from_input.click()
+
+        from_input.fill(FROM_STATION)
+
+        page.wait_for_timeout(1500)
+
+        page.keyboard.press("ArrowDown")
 
         page.keyboard.press("Enter")
 
-        page.fill("input[placeholder*='To']", TO_STATION)
+        # ----------------------
+
+        # TO (dropdown select)
+
+        # ----------------------
+
+        to_input = page.get_by_placeholder("To")
+
+        to_input.click()
+
+        to_input.fill(TO_STATION)
+
+        page.wait_for_timeout(1500)
+
+        page.keyboard.press("ArrowDown")
 
         page.keyboard.press("Enter")
 
-        page.click("input[type='date'], input[placeholder*='Date']")
+        # ----------------------
 
-        page.keyboard.type(DATE)
+        # DATE
 
-        page.keyboard.press("Enter")
+        # ----------------------
+
+        try:
+
+            date_input = page.locator("input[type='date']")
+
+            date_input.click()
+
+            date_input.fill("2025-07-03")  # safer ISO format
+
+        except:
+
+            page.keyboard.type(DATE)
+
+        # ----------------------
+
+        # SEARCH
+
+        # ----------------------
 
         page.click("button:has-text('Search')")
 
-        # WAIT UNTIL REAL RESULTS EXIST
+        page.wait_for_timeout(10000)
 
-        page.wait_for_selector("text=Select, text=Book, text=RM", timeout=20000)
+        # wait for results
 
-        # ------------------------
+        page.wait_for_selector("text=Select, text=Book, timeout=20000")
 
-        # LOCKED EXTRACTION MODE
+        # ----------------------
 
-        # ------------------------
+        # SCAN RESULTS
 
-        rows = page.query_selector_all("div")
+        # ----------------------
 
-        seen = set()
+        text = page.inner_text("body").lower()
 
-        for r in rows:
+        times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
 
-            try:
+        found = False
 
-                text = r.inner_text().lower()
+        for t in times:
 
-                # must contain time
+            if in_range(t):
 
-                times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+                if "select" in text or "book" in text or "rm" in text:
 
-                if not times:
+                    send(
 
-                    continue
+                        "🚆 KTMB SNIPER ALERT\n"
 
-                # MUST contain price OR action button
+                        f"{FROM_STATION} → {TO_STATION}\n"
 
-                has_action = (
+                        f"Date: {DATE}\n"
 
-                    r.query_selector("text=Select") or
+                        f"Time: {t}\n"
 
-                    r.query_selector("text=Book") or
+                        f"Status: AVAILABLE SLOT DETECTED"
 
-                    "rm" in text
+                    )
 
-                )
+                    found = True
 
-                if not has_action:
+        if not found:
 
-                    continue
-
-                for t in times:
-
-                    if in_range(t) and t not in seen:
-
-                        send(
-
-                            "🚆 KTMB v4 LOCKED ALERT\n"
-
-                            f"{FROM} → {TO}\n"
-
-                            f"Date: {DATE}\n"
-
-                            f"Time: {t}\n"
-
-                            f"Status: CONFIRMED AVAILABLE SLOT"
-
-                        )
-
-                        seen.add(t)
-
-            except:
-
-                continue
+            print("No matching trains found")
 
         browser.close()
 
