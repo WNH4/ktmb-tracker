@@ -44,21 +44,23 @@ def in_range(t):
 
 # ======================
 
-# SELECT2 (KTMB DROPDOWN FIX)
+# SELECT2 FIX (FINAL STABLE)
 
 # ======================
 
 def select_station(page, index, value):
 
-    dropdowns = page.locator(".select2-container")
+    # click container directly (bypasses hidden select + overlay issues)
 
-    dropdowns.nth(index).click()
+    containers = page.locator(".select2-container")
 
-    page.wait_for_timeout(1200)
+    containers.nth(index).click(force=True)
+
+    page.wait_for_timeout(1000)
 
     page.keyboard.type(value)
 
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(1200)
 
     page.keyboard.press("ArrowDown")
 
@@ -66,21 +68,19 @@ def select_station(page, index, value):
 
 # ======================
 
-# DATE SELECT (FIXED - NO INPUT CLICKING)
+# DATE PICKER (SAFE VERSION)
 
 # ======================
 
 def select_date(page, day):
 
-    # click the visible date field (NOT hidden input)
+    # click visible date trigger (NOT input)
 
-    date_field = page.locator(".form-control:visible").first
-
-    date_field.click()
+    page.locator(".form-control:visible").first.click(force=True)
 
     page.wait_for_timeout(1500)
 
-    # select day in calendar popup
+    # click day in calendar popup
 
     page.click(f"text={day}", timeout=8000)
 
@@ -94,7 +94,7 @@ def select_pax(page, value="1"):
 
     page.click("text=Pax", timeout=10000)
 
-    page.wait_for_timeout(1200)
+    page.wait_for_timeout(1000)
 
     page.keyboard.type(value)
 
@@ -112,8 +112,6 @@ def select_pax(page, value="1"):
 
 def click_search(page):
 
-    page.wait_for_timeout(2000)
-
     btn = page.locator("button:has-text('Search')")
 
     btn.wait_for(state="visible", timeout=10000)
@@ -122,7 +120,7 @@ def click_search(page):
 
 # ======================
 
-# MAIN BOT
+# MAIN
 
 # ======================
 
@@ -144,7 +142,7 @@ def run():
 
         page.wait_for_timeout(8000)
 
-        # close popup if exists
+        # popup
 
         try:
 
@@ -154,7 +152,7 @@ def run():
 
             pass
 
-        # open booking panel
+        # open booking
 
         try:
 
@@ -168,7 +166,7 @@ def run():
 
         # ======================
 
-        # FORM FLOW (STRICT ORDER)
+        # FORM FLOW
 
         # ======================
 
@@ -182,17 +180,11 @@ def run():
 
         page.wait_for_timeout(2500)
 
-        # ======================
-
-        # SEARCH
-
-        # ======================
-
         click_search(page)
 
         # ======================
 
-        # WAIT RESULTS
+        # RESULTS
 
         # ======================
 
@@ -210,12 +202,6 @@ def run():
 
             return
 
-        # ======================
-
-        # SCAN RESULTS
-
-        # ======================
-
         text = page.inner_text("body").lower()
 
         times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
@@ -230,7 +216,7 @@ def run():
 
                     send(
 
-                        "🚆 KTMB SNIPER v17 ALERT\n"
+                        "🚆 KTMB SNIPER v18 ALERT\n"
 
                         f"{FROM_STATION} → {TO_STATION}\n"
 
