@@ -52,19 +52,7 @@ def in_time_window(train_time):
 
 # ======================
 
-# SEAT PARSER
-
-# ======================
-
-def extract_seats(text):
-
-    match = re.search(r"available seats?\s*[:\-]?\s*(\d+)", text.lower())
-
-    return int(match.group(1)) if match else 0
-
-# ======================
-
-# SELECT2 HANDLER
+# SELECT2 FIX
 
 # ======================
 
@@ -132,47 +120,79 @@ def click_search(page):
 
 # ======================
 
-# 🔥 TRIP LOADER (FIXED CORE)
+# WAIT FOR TABLE
 
 # ======================
 
 def wait_for_trips(page):
 
-    # wait for ANY table or trip container
-
-    page.wait_for_selector("table, tr, .trip, .results", timeout=30000)
-
-    # allow JS to finish populating data
+    page.wait_for_selector("table", timeout=30000)
 
     page.wait_for_timeout(5000)
 
 # ======================
 
-# SCANNER (REAL LOGIC)
+# SEAT PARSER
+
+# ======================
+
+def extract_seats(text):
+
+    match = re.search(r"available seats?\s*[:\-]?\s*(\d+)", text.lower())
+
+    return int(match.group(1)) if match else 0
+
+# ======================
+
+# ROW-BASED SCANNER
 
 # ======================
 
 def scan(page):
 
-    text = page.inner_text("body").lower()
+    rows = page.locator("table tr")
 
-    times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+    count = rows.count()
 
-    seats = extract_seats(text)
+    for i in range(count):
 
-    for t in times:
+        row = rows.nth(i)
 
-        if in_time_window(t):
+        text = row.inner_text().lower()
 
-            if seats > 4:
+        # skip headers
 
-                return {
+        if "departure" in text and "arrival" in text:
 
-                    "time": t,
+            continue
 
-                    "seats": seats
+        # skip locked rows
 
-                }
+        if "login to view" in text:
+
+            continue
+
+        # extract departure time
+
+        times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+
+        seats = extract_seats(text)
+
+        for t in times:
+
+            if in_time_window(t):
+
+                if seats > 4:
+
+                    return {
+
+                        "time": t,
+
+                        "seats": seats,
+
+                        "row": text[:120]
+
+                    }
 
     return None
 
@@ -220,7 +240,7 @@ def run():
 
         # ======================
 
-        # FORM
+        # FORM FLOW
 
         # ======================
 
@@ -238,7 +258,7 @@ def run():
 
         # ======================
 
-        # 🔥 WAIT FOR REAL TRIPS
+        # WAIT TABLE
 
         # ======================
 
@@ -246,7 +266,7 @@ def run():
 
         # ======================
 
-        # SCAN
+        # SCAN RESULTS
 
         # ======================
 
@@ -256,25 +276,27 @@ def run():
 
             send(
 
-                "🚆 KTMB SNIPER v24 ALERT\n"
+                "🚆 KTMB SNIPER v27 ALERT\n"
 
                 f"{FROM_STATION} → {TO_STATION}\n"
 
                 f"Date: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}\n"
 
-                f"Time Window: {TARGET_TIME} ±15 min\n"
+                f"Target Time: {TARGET_TIME} ±{TIME_WINDOW_MIN}min\n"
 
                 f"Detected Time: {result['time']}\n"
 
                 f"Available Seats: {result['seats']}\n"
 
-                f"Status: MATCH FOUND"
+                f"Status: MATCH FOUND\n"
+
+                f"Row: {result['row']}"
 
             )
 
         else:
 
-            print("No valid trips found")
+            print("No valid trains found")
 
         browser.close()
 
