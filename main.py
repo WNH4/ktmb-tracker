@@ -1,4 +1,4 @@
-from playwright.sync_api import sync_playwright
+he from playwright.sync_api import sync_playwright
 
 import requests
 
@@ -37,35 +37,29 @@ def run():
 
         page = browser.new_page()
 
-        # -------------------------
+        # ------------------------
 
-        # 1. OPEN KTMB
+        # LOAD SITE
 
-        # -------------------------
+        # ------------------------
 
         page.goto("https://online.ktmb.com.my")
 
         page.wait_for_timeout(5000)
 
-        # -------------------------
+        # ------------------------
 
-        # 2. SET ROUTE
+        # INPUT FLOW (locked)
 
-        # -------------------------
+        # ------------------------
 
-        page.fill("input[placeholder*='From']", FROM_STATION)
-
-        page.keyboard.press("Enter")
-
-        page.fill("input[placeholder*='To']", TO_STATION)
+        page.fill("input[placeholder*='From']", FROM)
 
         page.keyboard.press("Enter")
 
-        # -------------------------
+        page.fill("input[placeholder*='To']", TO)
 
-        # 3. SET DATE
-
-        # -------------------------
+        page.keyboard.press("Enter")
 
         page.click("input[type='date'], input[placeholder*='Date']")
 
@@ -73,71 +67,75 @@ def run():
 
         page.keyboard.press("Enter")
 
-        # -------------------------
-
-        # 4. SEARCH
-
-        # -------------------------
-
         page.click("button:has-text('Search')")
 
-        page.wait_for_timeout(8000)
+        # WAIT UNTIL REAL RESULTS EXIST
 
-        # -------------------------
+        page.wait_for_selector("text=Select, text=Book, text=RM", timeout=20000)
 
-        # 5. FIND TRAIN CARDS
+        # ------------------------
 
-        # -------------------------
+        # LOCKED EXTRACTION MODE
 
-        cards = page.query_selector_all("div")
+        # ------------------------
 
-        found = False
+        rows = page.query_selector_all("div")
 
-        for card in cards:
+        seen = set()
+
+        for r in rows:
 
             try:
 
-                text = card.inner_text().lower()
+                text = r.inner_text().lower()
 
-                # extract time
+                # must contain time
 
                 times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
 
-                # REAL SEAT VALIDATION (IMPORTANT)
+                if not times:
 
-                has_select_button = card.query_selector("text=Select") is not None
+                    continue
 
-                has_book_button = card.query_selector("text=Book") is not None
+                # MUST contain price OR action button
 
-                is_available = has_select_button or has_book_button
+                has_action = (
+
+                    r.query_selector("text=Select") or
+
+                    r.query_selector("text=Book") or
+
+                    "rm" in text
+
+                )
+
+                if not has_action:
+
+                    continue
 
                 for t in times:
 
-                    if in_range(t) and is_available:
+                    if in_range(t) and t not in seen:
 
                         send(
 
-                            "🚆 KTMB SNIPER ALERT v2\n"
+                            "🚆 KTMB v4 LOCKED ALERT\n"
 
-                            f"{FROM_STATION} → {TO_STATION}\n"
+                            f"{FROM} → {TO}\n"
 
                             f"Date: {DATE}\n"
 
                             f"Time: {t}\n"
 
-                            f"Status: REAL SEAT AVAILABLE"
+                            f"Status: CONFIRMED AVAILABLE SLOT"
 
                         )
 
-                        found = True
+                        seen.add(t)
 
             except:
 
                 continue
-
-        if not found:
-
-            print("No valid train matches")
 
         browser.close()
 
