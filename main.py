@@ -39,7 +39,33 @@ def in_range(t):
 
 # ======================
 
-# MAIN BOT
+# SAFE SELECT (REAL USER FLOW)
+
+# ======================
+
+def select_station(page, label_text, value):
+
+    # click field by visible label text
+
+    page.click(f"text={label_text}", timeout=10000)
+
+    page.wait_for_timeout(1500)
+
+    # type station name
+
+    page.keyboard.type(value)
+
+    page.wait_for_timeout(1500)
+
+    # select first suggestion
+
+    page.keyboard.press("ArrowDown")
+
+    page.keyboard.press("Enter")
+
+# ======================
+
+# MAIN
 
 # ======================
 
@@ -61,11 +87,7 @@ def run():
 
         page.wait_for_timeout(8000)
 
-        # ----------------------
-
-        # HANDLE POPUP (if any)
-
-        # ----------------------
+        # close popup if exists
 
         try:
 
@@ -77,7 +99,7 @@ def run():
 
         # ----------------------
 
-        # OPEN BOOKING PANEL (if exists)
+        # OPEN BOOKING UI
 
         # ----------------------
 
@@ -91,67 +113,31 @@ def run():
 
         page.wait_for_timeout(3000)
 
-        # =========================================================
+        # ======================
 
-        # 🔥 FIXED INPUT DETECTION (NO HIDDEN INPUTS ANYMORE)
+        # INPUT FLOW (FIXED)
 
-        # =========================================================
+        # ======================
 
-        inputs = page.locator("input[type='text']:visible")
+        select_station(page, "From", FROM_STATION)
 
-        # ----------------------
-
-        # FROM STATION
+        select_station(page, "To", TO_STATION)
 
         # ----------------------
 
-        from_input = inputs.nth(0)
-
-        from_input.click()
-
-        from_input.fill(FROM_STATION)
-
-        page.wait_for_timeout(1500)
-
-        page.keyboard.press("ArrowDown")
-
-        page.keyboard.press("Enter")
-
-        # ----------------------
-
-        # TO STATION
-
-        # ----------------------
-
-        to_input = inputs.nth(1)
-
-        to_input.click()
-
-        to_input.fill(TO_STATION)
-
-        page.wait_for_timeout(1500)
-
-        page.keyboard.press("ArrowDown")
-
-        page.keyboard.press("Enter")
-
-        # ----------------------
-
-        # DATE INPUT (robust)
+        # DATE
 
         # ----------------------
 
         try:
 
-            date_input = page.locator("input[type='date']")
+            page.keyboard.type(DATE)
 
-            date_input.click()
-
-            date_input.fill("2025-07-03")
+            page.keyboard.press("Enter")
 
         except:
 
-            page.keyboard.type(DATE)
+            pass
 
         # ----------------------
 
@@ -159,11 +145,17 @@ def run():
 
         # ----------------------
 
-        page.click("button:has-text('Search')")
+        try:
 
-        page.wait_for_timeout(10000)
+            page.click("button:has-text('Search')")
 
-        # wait for results
+        except:
+
+            page.keyboard.press("Enter")
+
+        page.wait_for_timeout(12000)
+
+        # wait results
 
         try:
 
@@ -197,7 +189,7 @@ def run():
 
                     send(
 
-                        "🚆 KTMB SNIPER v5 ALERT\n"
+                        "🚆 KTMB SNIPER v6 ALERT\n"
 
                         f"{FROM_STATION} → {TO_STATION}\n"
 
@@ -205,7 +197,7 @@ def run():
 
                         f"Time: {t}\n"
 
-                        f"Status: VALID SEAT DETECTED"
+                        f"Status: SEAT AVAILABLE"
 
                     )
 
@@ -213,7 +205,7 @@ def run():
 
         if not found:
 
-            print("No matching trains found")
+            print("No match found")
 
         browser.close()
 
