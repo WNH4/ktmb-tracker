@@ -44,7 +44,7 @@ def in_range(t):
 
 # ======================
 
-# SELECT2 (KTMB DROPDOWN FIX)
+# SELECT2 FIX (KTMB DROPDOWN)
 
 # ======================
 
@@ -66,15 +66,19 @@ def select_station(page, index, value):
 
 # ======================
 
-# DATE SELECT (calendar click)
+# DATE SELECT (FIXED - NO INVALID SELECTORS)
 
 # ======================
 
 def select_date(page, day):
 
-    page.click("input[type='date'], text=Depart Date, text=Date", timeout=10000)
+    # open date picker (KTMB uses custom UI, not real input)
+
+    page.locator("input").first.click()
 
     page.wait_for_timeout(1500)
+
+    # click day in calendar
 
     page.click(f"text={day}", timeout=8000)
 
@@ -100,7 +104,7 @@ def select_pax(page, value="1"):
 
 # ======================
 
-# SEARCH BUTTON (STABLE)
+# SEARCH
 
 # ======================
 
@@ -176,11 +180,7 @@ def run():
 
         page.wait_for_timeout(2500)
 
-        # ======================
-
         # SEARCH
-
-        # ======================
 
         click_search(page)
 
@@ -224,7 +224,7 @@ def run():
 
                     send(
 
-                        "🚆 KTMB SNIPER v15 ALERT\n"
+                        "🚆 KTMB SNIPER v16 ALERT\n"
 
                         f"{FROM_STATION} → {TO_STATION}\n"
 
