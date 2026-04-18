@@ -5,10 +5,14 @@ CHAT_ID = "8240067274"
 
 url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-requests.post(url, data={
+response = requests.post(url, data={
 
     "chat_id": CHAT_ID,
 
-    "text": "KTMB BOT TEST: GitHub Actions working"
+    "text": "🚆 KTMB BOT TEST: GitHub Actions working"
 
 })
+
+print(response.status_code)
+
+print(response.text)
