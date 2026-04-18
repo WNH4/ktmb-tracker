@@ -10,7 +10,12 @@ CHAT_ID = "8240067274"
 
 FROM_STATION = "JB Sentral"
 TO_STATION = "Kluang"
-DATE = "21 May"
+
+TARGET_DATE = {
+    "day": "21",
+    "month": "May",
+    "year": "2026"
+}
 
 TIME_START = "21:00"
 TIME_END = "21:20"
@@ -29,7 +34,7 @@ def send(msg):
 
 # ======================
 
-# TIME CHECK
+# TIME FILTER
 
 # ======================
 
@@ -39,25 +44,19 @@ def in_range(t):
 
 # ======================
 
-# SAFE SELECT (REAL USER FLOW)
+# STATION SELECT
 
 # ======================
 
-def select_station(page, label_text, value):
+def select_station(page, label, value):
 
-    # click field by visible label text
-
-    page.click(f"text={label_text}", timeout=10000)
+    page.click(f"text={label}", timeout=10000)
 
     page.wait_for_timeout(1500)
-
-    # type station name
 
     page.keyboard.type(value)
 
     page.wait_for_timeout(1500)
-
-    # select first suggestion
 
     page.keyboard.press("ArrowDown")
 
@@ -65,7 +64,57 @@ def select_station(page, label_text, value):
 
 # ======================
 
-# MAIN
+# DATE SELECT (calendar UI)
+
+# ======================
+
+def select_date(page, day):
+
+    page.click("input[type='date'], text=Depart Date, text=Date", timeout=10000)
+
+    page.wait_for_timeout(1500)
+
+    page.click(f"text={day}", timeout=8000)
+
+# ======================
+
+# PAX SELECT
+
+# ======================
+
+def select_pax(page, value="1"):
+
+    page.click("text=Pax", timeout=10000)
+
+    page.wait_for_timeout(1500)
+
+    page.keyboard.type(value)
+
+    page.wait_for_timeout(1000)
+
+    page.keyboard.press("ArrowDown")
+
+    page.keyboard.press("Enter")
+
+# ======================
+
+# SEARCH (FIXED & STABLE)
+
+# ======================
+
+def click_search(page):
+
+    page.wait_for_timeout(2000)
+
+    search_btn = page.locator("button:has-text('Search')")
+
+    search_btn.wait_for(state="visible", timeout=10000)
+
+    search_btn.click()
+
+# ======================
+
+# MAIN BOT
 
 # ======================
 
@@ -97,11 +146,7 @@ def run():
 
             pass
 
-        # ----------------------
-
-        # OPEN BOOKING UI
-
-        # ----------------------
+        # open booking UI
 
         try:
 
@@ -111,51 +156,41 @@ def run():
 
             pass
 
-        page.wait_for_timeout(3000)
+        page.wait_for_timeout(4000)
 
         # ======================
 
-        # INPUT FLOW (FIXED)
+        # FORM FLOW (STRICT ORDER)
 
         # ======================
 
-        select_station(page, "From", FROM_STATION)
+        select_station(page, "Select Origin", FROM_STATION)
 
-        select_station(page, "To", TO_STATION)
+        select_station(page, "Select Destination", TO_STATION)
 
-        # ----------------------
+        select_date(page, TARGET_DATE["day"])
 
-        # DATE
+        select_pax(page, "1")
 
-        # ----------------------
+        # allow UI to settle (VERY IMPORTANT)
 
-        try:
+        page.wait_for_timeout(2500)
 
-            page.keyboard.type(DATE)
-
-            page.keyboard.press("Enter")
-
-        except:
-
-            pass
-
-        # ----------------------
+        # ======================
 
         # SEARCH
 
-        # ----------------------
+        # ======================
 
-        try:
+        click_search(page)
 
-            page.click("button:has-text('Search')")
+        # ======================
 
-        except:
+        # WAIT RESULTS
 
-            page.keyboard.press("Enter")
+        # ======================
 
         page.wait_for_timeout(12000)
-
-        # wait results
 
         try:
 
@@ -169,11 +204,11 @@ def run():
 
             return
 
-        # ----------------------
+        # ======================
 
         # SCAN RESULTS
 
-        # ----------------------
+        # ======================
 
         text = page.inner_text("body").lower()
 
@@ -189,15 +224,17 @@ def run():
 
                     send(
 
-                        "🚆 KTMB SNIPER v6 ALERT\n"
+                        "🚆 KTMB SNIPER v12 ALERT\n"
 
                         f"{FROM_STATION} → {TO_STATION}\n"
 
-                        f"Date: {DATE}\n"
+                        f"Date: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}\n"
+
+                        f"Pax: 1\n"
 
                         f"Time: {t}\n"
 
-                        f"Status: SEAT AVAILABLE"
+                        f"Status: AVAILABLE SEAT DETECTED"
 
                     )
 
@@ -205,7 +242,7 @@ def run():
 
         if not found:
 
-            print("No match found")
+            print("No matching trains found")
 
         browser.close()
 
