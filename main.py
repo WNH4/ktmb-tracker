@@ -53,11 +53,11 @@ def run():
 
         # ------------------------
 
-        page.fill("input[placeholder*='From']", FROM)
+        page.fill("input[placeholder*='From']", FROM_STATION)
 
         page.keyboard.press("Enter")
 
-        page.fill("input[placeholder*='To']", TO)
+        page.fill("input[placeholder*='To']", TO_STATION)
 
         page.keyboard.press("Enter")
 
