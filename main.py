@@ -4,14 +4,20 @@ import requests
 
 import re
 
+import time
+
 BOT_TOKEN = "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM"
 CHAT_ID = "8240067274"
+
+FROM_STATION = "JB Sentral"
+
+TO_STATION = "Kluang"
+
+DATE = "3 Jul"
 
 TIME_START = "21:00"
 
 TIME_END = "21:20"
-
-URL = "https://online.ktmb.com.my"
 
 def send(msg):
 
@@ -31,45 +37,107 @@ def run():
 
         page = browser.new_page()
 
-        page.goto(URL, wait_until="networkidle")
+        # -------------------------
+
+        # 1. OPEN KTMB
+
+        # -------------------------
+
+        page.goto("https://online.ktmb.com.my")
+
+        page.wait_for_timeout(5000)
+
+        # -------------------------
+
+        # 2. SET ROUTE
+
+        # -------------------------
+
+        page.fill("input[placeholder*='From']", FROM_STATION)
+
+        page.keyboard.press("Enter")
+
+        page.fill("input[placeholder*='To']", TO_STATION)
+
+        page.keyboard.press("Enter")
+
+        # -------------------------
+
+        # 3. SET DATE
+
+        # -------------------------
+
+        page.click("input[type='date'], input[placeholder*='Date']")
+
+        page.keyboard.type(DATE)
+
+        page.keyboard.press("Enter")
+
+        # -------------------------
+
+        # 4. SEARCH
+
+        # -------------------------
+
+        page.click("button:has-text('Search')")
 
         page.wait_for_timeout(8000)
 
-        # IMPORTANT: get rendered text (not raw HTML)
+        # -------------------------
 
-        text = page.inner_text("body").lower()
+        # 5. FIND TRAIN CARDS
 
-        # extract times properly
+        # -------------------------
 
-        times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+        cards = page.query_selector_all("div")
 
         found = False
 
-        for t in times:
+        for card in cards:
 
-            if in_range(t):
+            try:
 
-                # better availability detection
+                text = card.inner_text().lower()
 
-                if any(k in text for k in [
+                # extract time
 
-                    "available",
+                times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
 
-                    "select seat",
+                # REAL SEAT VALIDATION (IMPORTANT)
 
-                    "choose seat",
+                has_select_button = card.query_selector("text=Select") is not None
 
-                    "rm"
+                has_book_button = card.query_selector("text=Book") is not None
 
-                ]):
+                is_available = has_select_button or has_book_button
 
-                    send(f"🚆 KTMB ALERT\nTime: {t}\nStatus: POSSIBLE AVAILABILITY")
+                for t in times:
 
-                    found = True
+                    if in_range(t) and is_available:
+
+                        send(
+
+                            "🚆 KTMB SNIPER ALERT v2\n"
+
+                            f"{FROM_STATION} → {TO_STATION}\n"
+
+                            f"Date: {DATE}\n"
+
+                            f"Time: {t}\n"
+
+                            f"Status: REAL SEAT AVAILABLE"
+
+                        )
+
+                        found = True
+
+            except:
+
+                continue
 
         if not found:
 
-            print("No matching trains in window")
+            print("No valid train matches")
 
         browser.close()
 
