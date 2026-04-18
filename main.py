@@ -36,7 +36,7 @@ def send(msg):
 
 # ======================
 
-# TIME CHECK (±15 mins)
+# TIME CHECK (±15 min)
 
 # ======================
 
@@ -64,7 +64,7 @@ def extract_seats(text):
 
 # ======================
 
-# SELECT2 FIX
+# SELECT2 HANDLER
 
 # ======================
 
@@ -86,19 +86,15 @@ def select_station(page, index, value):
 
 # ======================
 
-# DATE SELECT (REAL KTMB FLOW)
+# DATE SELECT
 
 # ======================
 
 def select_date(page):
 
-    # open calendar (visible field only)
-
     page.locator(".form-control:visible").first.click(force=True)
 
     page.wait_for_timeout(1500)
-
-    # click day in popup calendar
 
     page.click(f"text={TARGET_DATE['day']}", timeout=8000)
 
@@ -108,13 +104,13 @@ def select_date(page):
 
 # ======================
 
-def select_pax(page, value="1"):
+def select_pax(page):
 
     page.click("text=Pax", timeout=10000)
 
     page.wait_for_timeout(800)
 
-    page.keyboard.type(value)
+    page.keyboard.type("1")
 
     page.keyboard.press("ArrowDown")
 
@@ -136,11 +132,27 @@ def click_search(page):
 
 # ======================
 
-# CORE SCANNER
+# 🔥 TRIP LOADER (FIXED CORE)
 
 # ======================
 
-def scan_results(page):
+def wait_for_trips(page):
+
+    # wait for ANY table or trip container
+
+    page.wait_for_selector("table, tr, .trip, .results", timeout=30000)
+
+    # allow JS to finish populating data
+
+    page.wait_for_timeout(5000)
+
+# ======================
+
+# SCANNER (REAL LOGIC)
+
+# ======================
+
+def scan(page):
 
     text = page.inner_text("body").lower()
 
@@ -208,7 +220,7 @@ def run():
 
         # ======================
 
-        # FORM FLOW
+        # FORM
 
         # ======================
 
@@ -218,43 +230,39 @@ def run():
 
         select_date(page)
 
-        select_pax(page, "1")
+        select_pax(page)
 
         page.wait_for_timeout(2000)
 
         click_search(page)
 
-        # WAIT RESULTS
+        # ======================
 
-        page.wait_for_timeout(12000)
+        # 🔥 WAIT FOR REAL TRIPS
 
-        try:
+        # ======================
 
-            page.wait_for_selector("text=Select, text=Book", timeout=20000)
+        wait_for_trips(page)
 
-        except:
-
-            print("No results loaded")
-
-            browser.close()
-
-            return
+        # ======================
 
         # SCAN
 
-        result = scan_results(page)
+        # ======================
+
+        result = scan(page)
 
         if result:
 
             send(
 
-                "🚆 KTMB SNIPER v21 ALERT\n"
+                "🚆 KTMB SNIPER v24 ALERT\n"
 
                 f"{FROM_STATION} → {TO_STATION}\n"
 
                 f"Date: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}\n"
 
-                f"Target Time: {TARGET_TIME} ±{TIME_WINDOW_MIN}min\n"
+                f"Time Window: {TARGET_TIME} ±15 min\n"
 
                 f"Detected Time: {result['time']}\n"
 
@@ -266,7 +274,7 @@ def run():
 
         else:
 
-            print("No valid trains found")
+            print("No valid trips found")
 
         browser.close()
 
