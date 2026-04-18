@@ -2,8 +2,8 @@ import re
 import requests
 from playwright.sync_api import sync_playwright
 
-BOT_TOKEN = "YOUR_BOT_TOKEN"
-CHAT_ID = "YOUR_CHAT_ID"
+BOT_TOKEN = "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM"
+CHAT_ID = "8240067274"
 
 URL = "https://online.ktmb.com.my"
 
