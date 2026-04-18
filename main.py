@@ -1,6 +1,7 @@
 from playwright.sync_api import sync_playwright
 import requests
 import re
+from datetime import datetime
 
 # ======================
 # CONFIG
@@ -17,8 +18,9 @@ TARGET_DATE = {
     "year": "2026"
 }
 
-TIME_START = "21:00"
-TIME_END = "21:20"
+TARGET_TIME = "21:05"
+
+TIME_WINDOW_MIN = 15
 
 # ======================
 
@@ -34,23 +36,39 @@ def send(msg):
 
 # ======================
 
-# TIME FILTER
+# TIME CHECK (±15 mins)
 
 # ======================
 
-def in_range(t):
+def in_time_window(train_time):
 
-    return TIME_START <= t <= TIME_END
+    fmt = "%H:%M"
+
+    t = datetime.strptime(train_time, fmt)
+
+    target = datetime.strptime(TARGET_TIME, fmt)
+
+    return abs((t - target).total_seconds()) <= TIME_WINDOW_MIN * 60
 
 # ======================
 
-# SELECT2 FIX (FINAL STABLE)
+# SEAT PARSER
+
+# ======================
+
+def extract_seats(text):
+
+    match = re.search(r"available seats?\s*[:\-]?\s*(\d+)", text.lower())
+
+    return int(match.group(1)) if match else 0
+
+# ======================
+
+# SELECT2 FIX
 
 # ======================
 
 def select_station(page, index, value):
-
-    # click container directly (bypasses hidden select + overlay issues)
 
     containers = page.locator(".select2-container")
 
@@ -68,25 +86,25 @@ def select_station(page, index, value):
 
 # ======================
 
-# DATE PICKER (SAFE VERSION)
+# DATE SELECT (REAL KTMB FLOW)
 
 # ======================
 
-def select_date(page, day):
+def select_date(page):
 
-    # click visible date trigger (NOT input)
+    # open calendar (visible field only)
 
     page.locator(".form-control:visible").first.click(force=True)
 
     page.wait_for_timeout(1500)
 
-    # click day in calendar popup
+    # click day in popup calendar
 
-    page.click(f"text={day}", timeout=8000)
+    page.click(f"text={TARGET_DATE['day']}", timeout=8000)
 
 # ======================
 
-# PAX SELECT
+# PAX
 
 # ======================
 
@@ -94,11 +112,9 @@ def select_pax(page, value="1"):
 
     page.click("text=Pax", timeout=10000)
 
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(800)
 
     page.keyboard.type(value)
-
-    page.wait_for_timeout(800)
 
     page.keyboard.press("ArrowDown")
 
@@ -106,7 +122,7 @@ def select_pax(page, value="1"):
 
 # ======================
 
-# SEARCH BUTTON
+# SEARCH
 
 # ======================
 
@@ -117,6 +133,36 @@ def click_search(page):
     btn.wait_for(state="visible", timeout=10000)
 
     btn.click()
+
+# ======================
+
+# CORE SCANNER
+
+# ======================
+
+def scan_results(page):
+
+    text = page.inner_text("body").lower()
+
+    times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+
+    seats = extract_seats(text)
+
+    for t in times:
+
+        if in_time_window(t):
+
+            if seats > 4:
+
+                return {
+
+                    "time": t,
+
+                    "seats": seats
+
+                }
+
+    return None
 
 # ======================
 
@@ -132,11 +178,7 @@ def run():
 
         page = browser.new_page()
 
-        # ----------------------
-
-        # OPEN KTMB
-
-        # ----------------------
+        # OPEN SITE
 
         page.goto("https://online.ktmb.com.my", wait_until="domcontentloaded")
 
@@ -152,7 +194,7 @@ def run():
 
             pass
 
-        # open booking
+        # booking
 
         try:
 
@@ -174,19 +216,15 @@ def run():
 
         select_station(page, 1, TO_STATION)
 
-        select_date(page, TARGET_DATE["day"])
+        select_date(page)
 
         select_pax(page, "1")
 
-        page.wait_for_timeout(2500)
+        page.wait_for_timeout(2000)
 
         click_search(page)
 
-        # ======================
-
-        # RESULTS
-
-        # ======================
+        # WAIT RESULTS
 
         page.wait_for_timeout(12000)
 
@@ -202,39 +240,33 @@ def run():
 
             return
 
-        text = page.inner_text("body").lower()
+        # SCAN
 
-        times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+        result = scan_results(page)
 
-        found = False
+        if result:
 
-        for t in times:
+            send(
 
-            if in_range(t):
+                "🚆 KTMB SNIPER v21 ALERT\n"
 
-                if "select" in text or "book" in text or "rm" in text:
+                f"{FROM_STATION} → {TO_STATION}\n"
 
-                    send(
+                f"Date: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}\n"
 
-                        "🚆 KTMB SNIPER v18 ALERT\n"
+                f"Target Time: {TARGET_TIME} ±{TIME_WINDOW_MIN}min\n"
 
-                        f"{FROM_STATION} → {TO_STATION}\n"
+                f"Detected Time: {result['time']}\n"
 
-                        f"Date: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}\n"
+                f"Available Seats: {result['seats']}\n"
 
-                        f"Pax: 1\n"
+                f"Status: MATCH FOUND"
 
-                        f"Time: {t}\n"
+            )
 
-                        f"Status: AVAILABLE SEAT DETECTED"
+        else:
 
-                    )
-
-                    found = True
-
-        if not found:
-
-            print("No matching trains found")
+            print("No valid trains found")
 
         browser.close()
 
