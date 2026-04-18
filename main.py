@@ -44,15 +44,17 @@ def in_range(t):
 
 # ======================
 
-# STATION SELECT
+# SELECT2 (KTMB DROPDOWN FIX)
 
 # ======================
 
-def select_station(page, label, value):
+def select_station(page, index, value):
 
-    page.click(f"text={label}", timeout=10000)
+    dropdowns = page.locator(".select2-container")
 
-    page.wait_for_timeout(1500)
+    dropdowns.nth(index).click()
+
+    page.wait_for_timeout(1200)
 
     page.keyboard.type(value)
 
@@ -64,7 +66,7 @@ def select_station(page, label, value):
 
 # ======================
 
-# DATE SELECT (calendar UI)
+# DATE SELECT (calendar click)
 
 # ======================
 
@@ -86,11 +88,11 @@ def select_pax(page, value="1"):
 
     page.click("text=Pax", timeout=10000)
 
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(1200)
 
     page.keyboard.type(value)
 
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(800)
 
     page.keyboard.press("ArrowDown")
 
@@ -98,7 +100,7 @@ def select_pax(page, value="1"):
 
 # ======================
 
-# SEARCH (FIXED & STABLE)
+# SEARCH BUTTON (STABLE)
 
 # ======================
 
@@ -106,11 +108,11 @@ def click_search(page):
 
     page.wait_for_timeout(2000)
 
-    search_btn = page.locator("button:has-text('Search')")
+    btn = page.locator("button:has-text('Search')")
 
-    search_btn.wait_for(state="visible", timeout=10000)
+    btn.wait_for(state="visible", timeout=10000)
 
-    search_btn.click()
+    btn.click()
 
 # ======================
 
@@ -146,7 +148,7 @@ def run():
 
             pass
 
-        # open booking UI
+        # open booking panel
 
         try:
 
@@ -164,15 +166,13 @@ def run():
 
         # ======================
 
-        select_station(page, "Select Origin", FROM_STATION)
+        select_station(page, 0, FROM_STATION)
 
-        select_station(page, "Select Destination", TO_STATION)
+        select_station(page, 1, TO_STATION)
 
         select_date(page, TARGET_DATE["day"])
 
         select_pax(page, "1")
-
-        # allow UI to settle (VERY IMPORTANT)
 
         page.wait_for_timeout(2500)
 
@@ -224,7 +224,7 @@ def run():
 
                     send(
 
-                        "🚆 KTMB SNIPER v12 ALERT\n"
+                        "🚆 KTMB SNIPER v15 ALERT\n"
 
                         f"{FROM_STATION} → {TO_STATION}\n"
 
