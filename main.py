@@ -13,7 +13,7 @@ FROM_STATION = "JB Sentral"
 
 TO_STATION = "Kluang"
 
-DATE = "3 Jul"
+DATE = "21 May"
 
 TIME_START = "21:00"
 
