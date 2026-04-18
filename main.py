@@ -39,7 +39,7 @@ def in_range(t):
 
 # ======================
 
-# MAIN
+# MAIN BOT
 
 # ======================
 
@@ -63,7 +63,7 @@ def run():
 
         # ----------------------
 
-        # HANDLE POPUPS
+        # HANDLE POPUP (if any)
 
         # ----------------------
 
@@ -77,7 +77,7 @@ def run():
 
         # ----------------------
 
-        # OPEN BOOKING UI (important)
+        # OPEN BOOKING PANEL (if exists)
 
         # ----------------------
 
@@ -91,19 +91,21 @@ def run():
 
         page.wait_for_timeout(3000)
 
+        # =========================================================
+
+        # 🔥 FIXED INPUT DETECTION (NO HIDDEN INPUTS ANYMORE)
+
+        # =========================================================
+
+        inputs = page.locator("input[type='text']:visible")
+
         # ----------------------
 
-        # SAFE INPUT DETECTION (NO PLACEHOLDER DEPENDENCY)
+        # FROM STATION
 
         # ----------------------
 
-        inputs = page.locator("input")
-
-        # FROM (first input fallback)
-
-        from_input = inputs.first
-
-        from_input.wait_for(state="visible", timeout=30000)
+        from_input = inputs.nth(0)
 
         from_input.click()
 
@@ -115,11 +117,13 @@ def run():
 
         page.keyboard.press("Enter")
 
-        # TO (second input fallback)
+        # ----------------------
+
+        # TO STATION
+
+        # ----------------------
 
         to_input = inputs.nth(1)
-
-        to_input.wait_for(state="visible", timeout=30000)
 
         to_input.click()
 
@@ -133,7 +137,7 @@ def run():
 
         # ----------------------
 
-        # DATE (robust fallback)
+        # DATE INPUT (robust)
 
         # ----------------------
 
@@ -159,13 +163,23 @@ def run():
 
         page.wait_for_timeout(10000)
 
-        # wait results
+        # wait for results
 
-        page.wait_for_selector("text=Select, text=Book", timeout=20000)
+        try:
+
+            page.wait_for_selector("text=Select, text=Book", timeout=20000)
+
+        except:
+
+            print("No results loaded")
+
+            browser.close()
+
+            return
 
         # ----------------------
 
-        # SCRAPE RESULTS
+        # SCAN RESULTS
 
         # ----------------------
 
@@ -183,7 +197,7 @@ def run():
 
                     send(
 
-                        "🚆 KTMB SNIPER ALERT v4.1\n"
+                        "🚆 KTMB SNIPER v5 ALERT\n"
 
                         f"{FROM_STATION} → {TO_STATION}\n"
 
@@ -191,7 +205,7 @@ def run():
 
                         f"Time: {t}\n"
 
-                        f"Status: AVAILABLE SLOT DETECTED"
+                        f"Status: VALID SEAT DETECTED"
 
                     )
 
@@ -199,7 +213,7 @@ def run():
 
         if not found:
 
-            print("No matches found")
+            print("No matching trains found")
 
         browser.close()
 
