@@ -1,26 +1,18 @@
 from playwright.sync_api import sync_playwright
-
 import requests
-
 import re
 
 # ======================
-
 # CONFIG
-
 # ======================
-
 BOT_TOKEN = "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM"
 CHAT_ID = "8240067274"
 
 FROM_STATION = "JB Sentral"
-
 TO_STATION = "Kluang"
-
 DATE = "21 May"
 
 TIME_START = "21:00"
-
 TIME_END = "21:20"
 
 # ======================
@@ -37,7 +29,7 @@ def send(msg):
 
 # ======================
 
-# TIME FILTER
+# TIME CHECK
 
 # ======================
 
@@ -47,7 +39,7 @@ def in_range(t):
 
 # ======================
 
-# MAIN BOT
+# MAIN
 
 # ======================
 
@@ -71,7 +63,7 @@ def run():
 
         # ----------------------
 
-        # HANDLE POPUPS (if any)
+        # HANDLE POPUPS
 
         # ----------------------
 
@@ -85,11 +77,33 @@ def run():
 
         # ----------------------
 
-        # FROM (dropdown select)
+        # OPEN BOOKING UI (important)
 
         # ----------------------
 
-        from_input = page.get_by_placeholder("From")
+        try:
+
+            page.click("text=Book Ticket", timeout=5000)
+
+        except:
+
+            pass
+
+        page.wait_for_timeout(3000)
+
+        # ----------------------
+
+        # SAFE INPUT DETECTION (NO PLACEHOLDER DEPENDENCY)
+
+        # ----------------------
+
+        inputs = page.locator("input")
+
+        # FROM (first input fallback)
+
+        from_input = inputs.first
+
+        from_input.wait_for(state="visible", timeout=30000)
 
         from_input.click()
 
@@ -101,13 +115,11 @@ def run():
 
         page.keyboard.press("Enter")
 
-        # ----------------------
+        # TO (second input fallback)
 
-        # TO (dropdown select)
+        to_input = inputs.nth(1)
 
-        # ----------------------
-
-        to_input = page.get_by_placeholder("To")
+        to_input.wait_for(state="visible", timeout=30000)
 
         to_input.click()
 
@@ -121,7 +133,7 @@ def run():
 
         # ----------------------
 
-        # DATE
+        # DATE (robust fallback)
 
         # ----------------------
 
@@ -131,7 +143,7 @@ def run():
 
             date_input.click()
 
-            date_input.fill("2025-07-03")  # safer ISO format
+            date_input.fill("2025-07-03")
 
         except:
 
@@ -147,13 +159,13 @@ def run():
 
         page.wait_for_timeout(10000)
 
-        # wait for results
+        # wait results
 
-        page.wait_for_selector("text=Select, text=Book, timeout=20000")
+        page.wait_for_selector("text=Select, text=Book", timeout=20000)
 
         # ----------------------
 
-        # SCAN RESULTS
+        # SCRAPE RESULTS
 
         # ----------------------
 
@@ -171,7 +183,7 @@ def run():
 
                     send(
 
-                        "🚆 KTMB SNIPER ALERT\n"
+                        "🚆 KTMB SNIPER ALERT v4.1\n"
 
                         f"{FROM_STATION} → {TO_STATION}\n"
 
@@ -187,7 +199,7 @@ def run():
 
         if not found:
 
-            print("No matching trains found")
+            print("No matches found")
 
         browser.close()
 
