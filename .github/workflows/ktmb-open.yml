@@ -18,6 +18,7 @@ jobs:
       MODE: "open_check"
       TIME_WINDOW_MIN: "15"
       SALE_START_SGT: ""
+      DEBUG: "true"
 
     steps:
       - name: Checkout
