@@ -69,7 +69,7 @@ def in_window(t):
 
 # ======================
 
-# SELECT STATION (SAFE SELECT2)
+# STATION SELECT
 
 # ======================
 
@@ -91,23 +91,17 @@ def select_station(page, value, label):
 
     page.wait_for_timeout(800)
 
-    search = page.locator("input.select2-search__field")
-
-    search.fill(value)
+    page.locator("input.select2-search__field").fill(value)
 
     page.wait_for_timeout(1200)
-
-    page.wait_for_selector(".select2-results__option", timeout=5000)
 
     page.locator(".select2-results__option").first.click()
 
     page.wait_for_timeout(1000)
 
-    step(f"✔ {label} selected")
-
 # ======================
 
-# DATE
+# DATE FIX (IMPORTANT)
 
 # ======================
 
@@ -115,149 +109,117 @@ def select_date(page):
 
     step("👉 Selecting DATE")
 
+    date_text = f"{TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}"
+
+    # open calendar
+
     page.locator("#OnwardDate").click(force=True)
 
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(1200)
+
+    # click day
 
     page.click(f"text={TARGET_DATE['day']}")
 
     page.wait_for_timeout(800)
 
+    # IMPORTANT: force blur so value commits
+
     page.keyboard.press("Tab")
 
     page.wait_for_timeout(1000)
 
-    step(f"✔ Date set: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
+    # verify
+
+    val = page.locator("#OnwardDate").input_value()
+
+    step(f"✔ Date selected: {val}")
 
 # ======================
 
-# PAX
+# SEARCH
 
 # ======================
 
-def select_pax(page):
+def search(page):
 
-    step("👉 Selecting PAX")
-
-    try:
-
-        page.click("text=Pax")
-
-        page.wait_for_timeout(500)
-
-        page.keyboard.type("1")
-
-        page.keyboard.press("Enter")
-
-        step("✔ Pax = 1")
-
-    except:
-
-        step("⚠️ Pax defaulted")
-
-# ======================
-
-# API INTERCEPT ENGINE
-
-# ======================
-
-def capture_api(page):
-
-    step("🚀 Capturing KTMB API response")
-
-    captured = {}
-
-    def on_response(response):
-
-        try:
-
-            url = response.url.lower()
-
-            # KTMB endpoints are usually XHR/fetch
-
-            if any(k in url for k in ["search", "trip", "schedule", "availability"]):
-
-                if response.status == 200:
-
-                    try:
-
-                        captured["data"] = response.json()
-
-                        step(f"✔ Captured API: {url}")
-
-                    except:
-
-                        pass
-
-        except:
-
-            pass
-
-    page.on("response", on_response)
+    step("👉 Clicking SEARCH")
 
     page.click("button:has-text('Search')")
 
-    page.wait_for_timeout(8000)
+    page.wait_for_load_state("networkidle", timeout=30000)
 
-    return captured.get("data")
+    page.wait_for_timeout(5000)
 
-# ======================
-
-# PARSE API DATA
+    step("✔ Search completed")
 
 # ======================
 
-def parse(api_data):
+# SCAN
 
-    step("👉 Parsing API response")
+# ======================
 
-    results = []
+def scan(page):
 
-    try:
+    step("👉 Scanning results")
 
-        trips = (
+    selectors = [
 
-            api_data.get("data")
+        "table tbody tr",
 
-            or api_data.get("trips")
+        ".table tr",
 
-            or api_data.get("result")
+        ".trip",
 
-            or api_data
+        ".result",
 
-        )
+        "div[class*='trip']",
 
-        for trip in trips:
+        "div[class*='result']"
 
-            try:
+    ]
 
-                time = trip.get("departureTime") or trip.get("departure") or ""
+    rows = None
 
-                seats = trip.get("availableSeats") or trip.get("seats") or 0
+    for sel in selectors:
 
-                if not time:
+        loc = page.locator(sel)
 
-                    continue
+        if loc.count() > 0:
 
-                if in_window(time) and int(seats) > 4:
+            rows = loc
 
-                    results.append({
+            step(f"✔ Using selector: {sel}")
 
-                        "time": time,
+            break
 
-                        "seats": seats
+    if rows is None:
 
-                    })
+        step("❌ No results rendered")
 
-            except:
+        step(page.inner_text("body")[:2000])
 
-                continue
+        return "❌ NO RESULTS"
 
-    except Exception as e:
+    step(f"Rows found: {rows.count()}")
 
-        step(f"⚠️ Parse error: {e}")
+    for i in range(rows.count()):
 
-    return results
+        text = rows.nth(i).inner_text().lower()
+
+        times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+
+        seats = re.search(r"(\d+)", text)
+
+        seats = int(seats.group(1)) if seats else 0
+
+        for t in times:
+
+            if in_window(t) and seats > 4:
+
+                return f"🚆 MATCH\nTime: {t}\nSeats: {seats}"
+
+    return "❌ No match"
 
 # ======================
 
@@ -269,7 +231,7 @@ def run():
 
     try:
 
-        step("🚀 BOT STARTED (API MODE)")
+        step("🚀 BOT STARTED")
 
         with sync_playwright() as p:
 
@@ -299,49 +261,19 @@ def run():
 
             page.wait_for_timeout(5000)
 
-            # FLOW
-
             select_station(page, FROM_STATION, "Origin")
 
             select_station(page, TO_STATION, "Destination")
 
+            # ✅ DATE (FIXED PROPERLY)
+
             select_date(page)
 
-            select_pax(page)
+            search(page)
 
-            # API MODE SEARCH
+            result = scan(page)
 
-            api_data = capture_api(page)
-
-            if not api_data:
-
-                send("❌ No API response captured")
-
-                browser.close()
-
-                return
-
-            trips = parse(api_data)
-
-            if not trips:
-
-                send("❌ No matching trains found")
-
-                browser.close()
-
-                return
-
-            best = trips[0]
-
-            send(
-
-                f"🚆 MATCH FOUND\n"
-
-                f"Time: {best['time']}\n"
-
-                f"Seats: {best['seats']}"
-
-            )
+            send(result)
 
             browser.close()
 
