@@ -1,7 +1,5 @@
-from playwright.sync_api import sync_playwright
 import requests
-import traceback
-import re
+import time
 from datetime import datetime
 
 # ======================
@@ -13,15 +11,17 @@ CHAT_ID = "8240067274"
 FROM_STATION = "JB Sentral"
 TO_STATION = "Kluang"
 
-TARGET_DATE = {
-    "day": "21",
-    "month": "May",
-    "year": "2026"
-}
+FROM_STATION = "JB SENTRAL"
+
+TO_STATION = "KLUANG"
+
+TRAVEL_DATE = "2026-05-21"   # YYYY-MM-DD format (IMPORTANT)
 
 TARGET_TIME = "21:05"
 
 TIME_WINDOW_MIN = 15
+
+BASE_URL = "https://online.ktmb.com.my/api"  # inferred endpoint pattern
 
 # ======================
 
@@ -69,312 +69,152 @@ def in_window(t):
 
 # ======================
 
-# STATION SELECT (FIXED SELECT2 COMMIT)
+# MAP STATION NAME → ID (YOU MAY NEED ADJUSTMENT ONCE)
 
 # ======================
 
-def select_station(page, value, label):
+STATION_MAP = {
 
-    step(f"👉 Selecting {label}")
+    "JB SENTRAL": "41",
 
-    page.keyboard.press("Escape")
+    "KLUANG": "45"
 
-    page.wait_for_timeout(600)
-
-    if label == "Origin":
-
-        page.locator("#select2-FromStationId-container").click()
-
-    else:
-
-        page.locator("#select2-ToStationId-container").click()
-
-    page.wait_for_timeout(800)
-
-    page.locator("input.select2-search__field").fill(value)
-
-    page.wait_for_timeout(1200)
-
-    page.locator(".select2-results__option").first.click()
-
-    # 🔥 IMPORTANT: allow Select2 to commit value
-
-    page.wait_for_timeout(1800)
-
-    if label == "Origin":
-
-        val = page.locator("#FromStationId").input_value()
-
-    else:
-
-        val = page.locator("#ToStationId").input_value()
-
-    step(f"✔ {label} committed: {val}")
+}
 
 # ======================
 
-# DATE SELECT (FIXED - REAL CLICK TARGET)
+# CORE API CALL (SNIPER MODE)
 
 # ======================
 
-def select_date(page):
+def fetch_trains():
 
-    step("👉 Selecting DATE")
+    step("🚀 Fetching KTMB API data (sniper mode)")
 
-    page.locator("#OnwardDate").click(force=True)
+    payload = {
 
-    page.wait_for_timeout(1500)
+        "origin": STATION_MAP[FROM_STATION],
 
-    day = TARGET_DATE["day"]
+        "destination": STATION_MAP[TO_STATION],
 
-    # 🔥 click actual enabled date cell
+        "date": TRAVEL_DATE,
 
-    date_cell = page.locator(
+        "passengers": 1
 
-        f".ui-datepicker-calendar td:not(.ui-state-disabled) a:text('{day}')"
+    }
+
+    headers = {
+
+        "User-Agent": "Mozilla/5.0",
+
+        "Accept": "application/json, text/plain, */*",
+
+        "Referer": "https://online.ktmb.com.my/"
+
+    }
+
+    # ⚠️ This endpoint may differ slightly — adjust if needed
+
+    r = requests.get(
+
+        "https://online.ktmb.com.my/ktmb-api/search",
+
+        params=payload,
+
+        headers=headers,
+
+        timeout=20
 
     )
 
-    date_cell.first.click()
+    step(f"HTTP STATUS: {r.status_code}")
 
-    page.wait_for_timeout(1200)
+    if r.status_code != 200:
 
-    # force close calendar (commits state)
-
-    page.keyboard.press("Escape")
-
-    page.wait_for_timeout(1000)
-
-    val = page.locator("#OnwardDate").input_value()
-
-    step(f"✔ Date committed: {val}")
-
-# ======================
-
-# PAX (SAFE DEFAULT)
-
-# ======================
-
-def select_pax(page):
-
-    step("👉 Selecting PAX")
+        return None
 
     try:
 
-        page.click("text=Pax")
-
-        page.wait_for_timeout(500)
-
-        page.keyboard.type("1")
-
-        page.keyboard.press("Enter")
-
-        page.wait_for_timeout(800)
-
-        step("✔ Pax = 1")
+        return r.json()
 
     except:
 
-        step("⚠️ Pax default used")
+        step("❌ Response not JSON")
+
+        return None
 
 # ======================
 
-# VALIDATION (CRITICAL DEBUG POINT)
+# PARSE RESULTS
 
 # ======================
 
-def validate(page):
+def parse(data):
 
-    step("👉 Final validation")
+    step("👉 Parsing results")
 
-    origin = page.locator("#FromStationId").input_value()
+    if not data:
 
-    dest = page.locator("#ToStationId").input_value()
+        return "❌ NO DATA"
 
-    date = page.locator("#OnwardDate").input_value()
+    results = data.get("trains", []) or data.get("data", [])
 
-    step(f"DEBUG origin: {origin}")
+    matches = []
 
-    step(f"DEBUG dest: {dest}")
+    for t in results:
 
-    step(f"DEBUG date: {date}")
+        try:
 
-    if not origin:
+            dep = t.get("departure_time")
 
-        return False, "Origin missing"
+            seats = int(t.get("available_seats", 0))
 
-    if not dest:
+            if dep and seats:
 
-        return False, "Destination missing"
+                if in_window(dep) and seats > 4:
 
-    if not date:
+                    matches.append(f"{dep} | seats: {seats}")
 
-        return False, "Date missing"
+        except:
 
-    return True, "OK"
+            continue
 
-# ======================
+    if not matches:
 
-# SEARCH
+        return "❌ No match"
 
-# ======================
-
-def search(page):
-
-    step("👉 Clicking SEARCH")
-
-    btn = page.locator("button:has-text('Search')")
-
-    btn.scroll_into_view_if_needed()
-
-    page.wait_for_timeout(800)
-
-    btn.click()
-
-    page.wait_for_load_state("networkidle", timeout=30000)
-
-    page.wait_for_timeout(6000)
-
-    step("✔ Search completed")
+    return "🚆 MATCH FOUND\n" + "\n".join(matches)
 
 # ======================
 
-# SCAN RESULTS
-
-# ======================
-
-def scan(page):
-
-    step("👉 Scanning results")
-
-    selectors = [
-
-        "table tbody tr",
-
-        "table tr",
-
-        ".trip",
-
-        ".result",
-
-        "div[class*='trip']",
-
-        "div[class*='result']",
-
-        ".card"
-
-    ]
-
-    rows = None
-
-    for sel in selectors:
-
-        loc = page.locator(sel)
-
-        if loc.count() > 0:
-
-            rows = loc
-
-            step(f"✔ Using selector: {sel}")
-
-            break
-
-    if rows is None:
-
-        step("❌ No results rendered")
-
-        step(page.inner_text("body")[:2000])
-
-        return "❌ NO RESULTS"
-
-    step(f"Rows found: {rows.count()}")
-
-    for i in range(rows.count()):
-
-        text = rows.nth(i).inner_text().lower()
-
-        times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
-
-        seats = re.search(r"(\d+)", text)
-
-        seats = int(seats.group(1)) if seats else 0
-
-        for t in times:
-
-            if in_window(t) and seats > 4:
-
-                return f"🚆 MATCH\nTime: {t}\nSeats: {seats}"
-
-    return "❌ No match"
-
-# ======================
-
-# MAIN
+# MAIN LOOP (TRACKER MODE)
 
 # ======================
 
 def run():
 
-    try:
+    step("🔥 KTMB API SNIPER STARTED")
 
-        step("🚀 BOT STARTED (FINAL STABLE VERSION)")
+    while True:
 
-        with sync_playwright() as p:
+        try:
 
-            browser = p.chromium.launch(headless=True)
+            data = fetch_trains()
 
-            page = browser.new_page()
+            result = parse(data)
 
-            page.goto("https://online.ktmb.com.my")
+            step(result)
 
-            page.wait_for_timeout(8000)
+            if "MATCH" in result:
 
-            try:
+                send(result)
 
-                page.click("text=Accept")
+            time.sleep(60)  # poll every 60 seconds
 
-            except:
+        except Exception as e:
 
-                pass
+            send(f"🔥 ERROR\n{str(e)}")
 
-            try:
-
-                page.click("text=Book Ticket")
-
-            except:
-
-                pass
-
-            page.wait_for_timeout(5000)
-
-            select_station(page, FROM_STATION, "Origin")
-
-            select_station(page, TO_STATION, "Destination")
-
-            select_date(page)
-
-            select_pax(page)
-
-            ok, reason = validate(page)
-
-            step(f"✔ VALIDATION: {reason}")
-
-            if not ok:
-
-                send(f"❌ FORM INVALID: {reason}")
-
-                return
-
-            search(page)
-
-            result = scan(page)
-
-            send(result)
-
-            browser.close()
-
-    except Exception:
-
-        send("🔥 CRASH\n" + traceback.format_exc())
+            time.sleep(30)
 
 run()
