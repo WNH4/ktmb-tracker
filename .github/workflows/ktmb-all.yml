@@ -1,0 +1,95 @@
+name: ktmb all watchers
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+jobs:
+  run-all:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Ensure state folder exists
+        run: mkdir -p .state
+
+      # 1) RETURN WATCHER
+      - name: Run return watcher
+        env:
+          BOT_TOKEN: "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM"
+          CHAT_ID: "8240067274"
+          FROM_STATION: "JB SENTRAL"
+          TO_STATION: "KLUANG"
+          TRAVEL_DATE: "2026-05-30"
+          TARGET_TIME: "21:05"
+          MODE: "resale"
+          TIME_WINDOW_MIN: "15"
+          MIN_SEATS: "5"
+          DEBUG: "false"
+        run: python main.py
+
+      # 2) OPENING WATCHER - JB -> KLUANG
+      - name: Run opening watcher JB to Kluang
+        env:
+          BOT_TOKEN: "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM"
+          CHAT_ID: "8240067274"
+          FROM_STATION: "JB SENTRAL"
+          TO_STATION: "KLUANG"
+          TRAVEL_DATE: "2026-07-01"
+          TARGET_TIME: "21:05"
+          MODE: "open_check"
+          TIME_WINDOW_MIN: "15"
+          SALE_START_SGT: ""
+          DEBUG: "false"
+        run: python main.py
+
+      # 3) OPENING WATCHER - KLUANG -> JB
+      - name: Run opening watcher Kluang to JB
+        env:
+          BOT_TOKEN: "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM"
+          CHAT_ID: "8240067274"
+          FROM_STATION: "KLUANG"
+          TO_STATION: "JB SENTRAL"
+          TRAVEL_DATE: "2026-10-01"
+          TARGET_TIME: "18:40"
+          MODE: "open_check"
+          TIME_WINDOW_MIN: "15"
+          SALE_START_SGT: ""
+          DEBUG: "false"
+        run: python main.py
+
+      - name: Commit state
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add .state || true
+
+          if git diff --cached --quiet; then
+            echo "No state changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Update KTMB state"
+
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin main && break
+            sleep 5
+          done
