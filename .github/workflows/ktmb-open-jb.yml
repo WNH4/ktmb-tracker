@@ -1,4 +1,4 @@
-name: ktmb opening watcher
+name: ktmb opening jb
 
 on:
   workflow_dispatch:
@@ -15,11 +15,11 @@ jobs:
       CHAT_ID: "8240067274"
       FROM_STATION: "JB SENTRAL"
       TO_STATION: "KLUANG"
-      TRAVEL_DATE: "2026-08-01"
+      TRAVEL_DATE: "2026-07-01"
       TARGET_TIME: "21:05"
       MODE: "open_check"
       TIME_WINDOW_MIN: "15"
-      SALE_START_SGT: "2026-08-01T00:00:00+08:00"
+      SALE_START_SGT: ""
       DEBUG: "false"
 
     steps:
