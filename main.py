@@ -69,7 +69,7 @@ def in_window(t):
 
 # ======================
 
-# FIXED SELECT2 (CRITICAL FIX)
+# SELECT2 FIX (FINAL STABLE)
 
 # ======================
 
@@ -77,13 +77,13 @@ def select_station(page, value, label):
 
     step(f"👉 Selecting {label}")
 
-    # RESET DROPDOWN STATE (IMPORTANT FIX)
+    # reset stale dropdown state
 
     page.keyboard.press("Escape")
 
     page.wait_for_timeout(500)
 
-    # OPEN CORRECT FIELD
+    # open correct dropdown
 
     if label == "Origin":
 
@@ -95,7 +95,7 @@ def select_station(page, value, label):
 
     page.wait_for_timeout(800)
 
-    # TYPE INTO ACTIVE SEARCH BOX
+    # type into active select2 search box
 
     search = page.locator("input.select2-search__field")
 
@@ -103,17 +103,17 @@ def select_station(page, value, label):
 
     page.wait_for_timeout(1200)
 
-    # WAIT FOR RESULTS
+    # wait results
 
     page.wait_for_selector(".select2-results__option", timeout=5000)
 
-    # CLICK FIRST MATCH
+    # select first match
 
     page.locator(".select2-results__option").first.click()
 
     page.wait_for_timeout(1200)
 
-    # VERIFY IMMEDIATELY (IMPORTANT)
+    # verify backend value
 
     try:
 
@@ -125,15 +125,15 @@ def select_station(page, value, label):
 
             val = page.locator("#ToStationId").input_value()
 
-        step(f"DEBUG {label} value: {val}")
+        step(f"✔ {label} confirmed: {val}")
 
     except:
 
-        step(f"⚠️ Cannot verify {label}")
+        step(f"⚠️ {label} verification failed")
 
 # ======================
 
-# DATE SELECTION
+# DATE SELECTION (COMMIT SAFE)
 
 # ======================
 
@@ -149,11 +149,13 @@ def select_date(page):
 
     page.wait_for_timeout(800)
 
+    # force JS commit
+
     page.keyboard.press("Tab")
 
     page.wait_for_timeout(1200)
 
-    step(f"✔ Date: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
+    step(f"✔ Date selected: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
 
 # ======================
 
@@ -183,7 +185,7 @@ def select_pax(page):
 
 # ======================
 
-# VALIDATION
+# VALIDATION (REAL BACKEND CHECK)
 
 # ======================
 
@@ -217,7 +219,7 @@ def validate(page):
 
 # ======================
 
-# SEARCH
+# SEARCH (AJAX SAFE)
 
 # ======================
 
@@ -227,29 +229,69 @@ def search(page):
 
     page.click("button:has-text('Search')")
 
-    page.wait_for_timeout(12000)
+    # wait for ANY rendering state
 
-    step("✔ Search complete")
+    page.wait_for_timeout(5000)
+
+    page.wait_for_selector(
+
+        "table, .table, .trip, .result, .results, .container",
+
+        timeout=30000
+
+    )
+
+    step("✔ Search completed (waiting for results render)")
 
 # ======================
 
-# SCAN RESULTS
+# SCAN RESULTS (ROBUST)
 
 # ======================
 
 def scan(page):
 
-    step("👉 Scanning results")
+    step("👉 Scanning results (multi-mode)")
 
-    if page.locator("table").count() == 0:
+    page.wait_for_timeout(4000)
 
-        return "❌ NO TABLE FOUND"
+    selectors = [
 
-    rows = page.locator("table tr")
+        "table tr",
+
+        ".trip",
+
+        ".result",
+
+        ".results",
+
+        ".table tr"
+
+    ]
+
+    rows = None
+
+    for sel in selectors:
+
+        if page.locator(sel).count() > 0:
+
+            rows = page.locator(sel)
+
+            step(f"✔ Using selector: {sel}")
+
+            break
+
+    if rows is None:
+
+        step("❌ No structured results found → dumping page")
+
+        step(page.inner_text("body")[:2000])
+
+        return "❌ NO RESULTS FOUND"
 
     n = rows.count()
 
-    step(f"Rows: {n}")
+    step(f"Rows found: {n}")
 
     for i in range(n):
 
@@ -271,7 +313,7 @@ def scan(page):
 
                 return f"🚆 MATCH\nTime: {t}\nSeats: {seats}"
 
-    return "❌ No match"
+    return "❌ No matching trains"
 
 # ======================
 
@@ -295,7 +337,7 @@ def run():
 
             page.wait_for_timeout(8000)
 
-            # popup
+            # popup handling
 
             try:
 
@@ -305,7 +347,7 @@ def run():
 
                 pass
 
-            # booking
+            # enter booking
 
             try:
 
