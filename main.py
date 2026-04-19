@@ -2,6 +2,7 @@ from playwright.sync_api import sync_playwright
 import requests
 import re
 from datetime import datetime
+import traceback
 
 # ======================
 # CONFIG
@@ -32,13 +33,29 @@ def send(msg):
 
     try:
 
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        requests.post(
 
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+
+            data={"chat_id": CHAT_ID, "text": msg}
+
+        )
 
     except:
 
         pass
+
+# ======================
+
+# DEBUG STEP WRAPPER
+
+# ======================
+
+def step(msg):
+
+    print(msg)
+
+    send(msg)
 
 # ======================
 
@@ -58,65 +75,61 @@ def in_time_window(train_time):
 
 # ======================
 
-# SELECT STATION (SELECT2)
+# STEP 1: SELECT STATION
 
 # ======================
 
-def select_station(page, index, value):
+def select_station(page, index, value, label):
 
-    try:
+    step(f"👉 STEP: Selecting {label}")
 
-        containers = page.locator(".select2-container")
+    containers = page.locator(".select2-container")
 
-        containers.nth(index).click(force=True)
+    containers.nth(index).click(force=True)
 
-        page.wait_for_timeout(1000)
+    page.wait_for_timeout(1000)
 
-        page.keyboard.type(value)
+    page.keyboard.type(value)
 
-        page.wait_for_timeout(1000)
+    page.wait_for_timeout(1200)
 
-        page.keyboard.press("ArrowDown")
+    page.keyboard.press("ArrowDown")
 
-        page.keyboard.press("Enter")
+    page.keyboard.press("Enter")
 
-    except:
-
-        pass
+    step(f"✔ {label} selected: {value}")
 
 # ======================
 
-# SELECT DATE (CRITICAL FIX)
+# STEP 2: DATE
 
 # ======================
 
 def select_date(page):
 
-    try:
+    step("👉 STEP: Selecting DATE")
 
-        # click date field
+    page.locator("#OnwardDate").click(force=True)
 
-        page.locator("#OnwardDate").click(force=True)
+    page.wait_for_timeout(1500)
 
-        page.wait_for_timeout(1500)
+    page.click(f"text={TARGET_DATE['day']}", timeout=8000)
 
-        # click day in calendar
+    page.keyboard.press("Tab")  # FORCE JS COMMIT
 
-        page.click(f"text={TARGET_DATE['day']}", timeout=8000)
+    page.wait_for_timeout(1000)
 
-        send(f"📅 Date selected: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
-
-    except Exception as e:
-
-        send(f"⚠️ Date selection failed: {str(e)}")
+    step(f"✔ Date selected: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
 
 # ======================
 
-# SELECT PAX
+# STEP 3: PAX
 
 # ======================
 
 def select_pax(page):
+
+    step("👉 STEP: Selecting PAX")
 
     try:
 
@@ -126,65 +139,95 @@ def select_pax(page):
 
         page.keyboard.type("1")
 
-        page.keyboard.press("ArrowDown")
-
         page.keyboard.press("Enter")
+
+        step("✔ Pax selected: 1")
 
     except:
 
-        pass
+        step("⚠️ Pax selection failed (ignored)")
 
 # ======================
 
-# SCAN TABLE
+# STEP 4: SEARCH
+
+# ======================
+
+def click_search(page):
+
+    step("👉 STEP: Clicking SEARCH")
+
+    page.click("button:has-text('Search')")
+
+    page.wait_for_timeout(12000)  # IMPORTANT: allow backend load
+
+    step("✔ Search clicked + waiting done")
+
+# ======================
+
+# STEP 5: VERIFY PAGE
+
+# ======================
+
+def verify_page(page):
+
+    step("👉 STEP: Verifying results page")
+
+    url = page.url
+
+    step(f"📍 URL: {url}")
+
+    body = page.inner_text("body")[:800]
+
+    step(f"🧾 PAGE SNAPSHOT:\n{body}")
+
+    tables = page.locator("table").count()
+
+    step(f"📊 Tables found: {tables}")
+
+    return tables > 0
+
+# ======================
+
+# STEP 6: SCAN TABLE
 
 # ======================
 
 def scan(page):
 
-    try:
+    step("👉 STEP: Scanning results")
 
-        tables = page.locator("table")
+    rows = page.locator("table tr")
 
-        if tables.count() == 0:
+    count = rows.count()
 
-            return "⚠️ No table found (not on results page)"
+    step(f"Rows found: {count}")
 
-        rows = page.locator("table tr")
+    for i in range(count):
 
-        count = rows.count()
+        text = rows.nth(i).inner_text().lower()
 
-        for i in range(count):
+        if "departure" in text and "arrival" in text:
 
-            row = rows.nth(i)
+            continue
 
-            text = row.inner_text().lower()
+        if "login to view" in text:
 
-            if "departure" in text and "arrival" in text:
+            continue
 
-                continue
+        times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
 
-            if "login to view" in text:
+        seats = re.search(r"(\d+)", text)
 
-                continue
+        seats = int(seats.group(1)) if seats else 0
 
-            times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+        for t in times:
 
-            seats_match = re.search(r"(\d+)", text)
+            if in_time_window(t) and seats > 4:
 
-            seats = int(seats_match.group(1)) if seats_match else 0
+                return f"🚆 MATCH\nTime: {t}\nSeats: {seats}"
 
-            for t in times:
-
-                if in_time_window(t) and seats > 4:
-
-                    return f"🚆 MATCH FOUND\nTime: {t}\nSeats: {seats}"
-
-        return "❌ No matching trains found"
-
-    except Exception as e:
-
-        return f"❌ Scan error: {str(e)}"
+    return "❌ No match found"
 
 # ======================
 
@@ -196,57 +239,61 @@ def run():
 
     try:
 
+        step("🚀 BOT STARTED")
+
         with sync_playwright() as p:
 
             browser = p.chromium.launch(headless=True)
 
             page = browser.new_page()
 
-            send("🚀 BOT STARTED")
+            # OPEN SITE
 
-            # open site
+            step("👉 Opening KTMB site")
 
             page.goto("https://online.ktmb.com.my")
 
             page.wait_for_timeout(8000)
 
-            # popup
+            # POPUP
 
             try:
 
-                page.click("text=Accept", timeout=3000)
+                page.click("text=Accept")
+
+                step("✔ Popup accepted")
 
             except:
 
-                pass
+                step("ℹ️ No popup")
 
-            # booking
+            # BOOKING
 
             try:
 
-                page.click("text=Book Ticket", timeout=5000)
+                page.click("text=Book Ticket")
+
+                step("✔ Booking page opened")
 
             except:
 
-                pass
+                step("⚠️ Booking click failed")
 
             page.wait_for_timeout(5000)
 
             # ======================
 
-            # FORM (NOW COMPLETE)
+            # FORM FLOW
 
             # ======================
 
-            select_station(page, 0, FROM_STATION)
+            select_station(page, 0, FROM_STATION, "Origin")
 
-            select_station(page, 1, TO_STATION)
+            select_station(page, 1, TO_STATION, "Destination")
 
             select_date(page)
 
             select_pax(page)
-
-            page.wait_for_timeout(2000)
 
             # ======================
 
@@ -254,17 +301,21 @@ def run():
 
             # ======================
 
-            try:
+            click_search(page)
 
-                page.click("button:has-text('Search')", timeout=5000)
+            # ======================
 
-                page.wait_for_timeout(8000)
+            # VERIFY
 
-                send("🔍 Search triggered")
+            # ======================
 
-            except:
+            if not verify_page(page):
 
-                send("⚠️ Search click failed")
+                send("❌ NO TABLE FOUND → search failed")
+
+                browser.close()
+
+                return
 
             # ======================
 
@@ -280,12 +331,10 @@ def run():
 
     except Exception as e:
 
-        send(f"🔥 BOT ERROR\n{str(e)}")
+        error = traceback.format_exc()
 
-# ======================
+        send(f"🔥 CRASH\n{str(e)}")
 
-# RUN
-
-# ======================
+        print(error)
 
 run()
