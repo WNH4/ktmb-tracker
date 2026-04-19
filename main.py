@@ -15,17 +15,14 @@ CHAT_ID = os.getenv("CHAT_ID", "8240067274")
 FROM_STATION = os.getenv("FROM_STATION", "JB SENTRAL")
 TO_STATION = os.getenv("TO_STATION", "KLUANG")
 
-TRAVEL_DATE = os.getenv("TRAVEL_DATE", "")              # required
-TARGET_TIME = os.getenv("TARGET_TIME", "21:05")         # used by resale + open_check
-MODE = os.getenv("MODE", "resale")                      # resale / open_check
+TRAVEL_DATE = os.getenv("TRAVEL_DATE", "")
+TARGET_TIME = os.getenv("TARGET_TIME", "21:05")
+MODE = os.getenv("MODE", "resale")  # resale / open_check
 
 TIME_WINDOW_MIN = int(os.getenv("TIME_WINDOW_MIN", "15"))
 MIN_SEATS = int(os.getenv("MIN_SEATS", "5"))
 
-# for open_check; leave blank to check immediately
 SALE_START_SGT = os.getenv("SALE_START_SGT", "")
-
-# debug telegram messages on/off
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 STATE_DIR = ".state"
@@ -294,7 +291,8 @@ def handle_open_check(result):
 
         if not previously_open:
             send(
-                f"🎉 KTMB TARGET TRIP OPENED\n"
+                f"🎉 KTMB TICKET OPENED\n"
+                f"{FROM_STATION} → {TO_STATION}\n"
                 f"Date: {TRAVEL_DATE}\n"
                 f"Time: {result['departure']}\n"
                 f"Arrival: {result['arrival']}\n"
@@ -304,12 +302,15 @@ def handle_open_check(result):
 
         state["opened"] = True
         state["last_departure"] = result["departure"]
+
     else:
         debug_send(
             f"⏳ Not open for target window\n"
+            f"{FROM_STATION} → {TO_STATION}\n"
             f"Date: {TRAVEL_DATE}\n"
             f"Target: {TARGET_TIME} ± {TIME_WINDOW_MIN} min"
         )
+
         state["opened"] = False
         state["last_departure"] = None
 
