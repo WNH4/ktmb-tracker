@@ -20,9 +20,7 @@ TARGET_DATE = {
 }
 
 TARGET_TIME = "21:05"
-
 TIME_WINDOW_MIN = 15
-
 MIN_SEATS = 5
 
 # ======================
@@ -307,7 +305,9 @@ def scan(page):
 
             continue
 
-        times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+        # FIXED: capture FULL time, not just hour
+
+        times = re.findall(r"\b((?:[01]\d|2[0-3]):[0-5]\d)\b", text)
 
         seats_match = re.search(r"available seats?\s*[:\-]?\s*(\d+)", text)
 
