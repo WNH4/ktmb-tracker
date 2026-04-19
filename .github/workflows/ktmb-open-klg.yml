@@ -1,4 +1,4 @@
-name: ktmb open kluang jb nov26
+name: ktmb open kluang
 
 on:
   workflow_dispatch:
