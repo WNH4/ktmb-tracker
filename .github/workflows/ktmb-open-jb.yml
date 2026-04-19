@@ -1,5 +1,9 @@
 name: ktmb opening jb
 
+concurrency:
+  group: ktmb-state
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
   schedule:
@@ -10,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     env:
       BOT_TOKEN: "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM"
       CHAT_ID: "8240067274"
@@ -45,6 +50,17 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+
           git add .state || true
-          git diff --cached --quiet || git commit -m "Update KTMB open state"
-          git push
+
+          if git diff --cached --quiet; then
+            echo "No state changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Update KTMB state"
+
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin main && break
+            sleep 5
+          done
