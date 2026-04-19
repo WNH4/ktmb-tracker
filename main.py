@@ -14,8 +14,8 @@ FROM_STATION = "JB SENTRAL"
 TO_STATION = "KLUANG"
 
 TARGET_DATE = {
-    "day": "21",
-    "month": "May",
+    "day": "30",
+    "month": "Apr",
     "year": "2026"
 }
 
