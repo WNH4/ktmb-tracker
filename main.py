@@ -69,7 +69,7 @@ def in_window(t):
 
 # ======================
 
-# SELECT2 FIX (STABLE)
+# FIXED SELECT2 (CRITICAL FIX)
 
 # ======================
 
@@ -77,13 +77,25 @@ def select_station(page, value, label):
 
     step(f"👉 Selecting {label}")
 
-    # open dropdown
+    # RESET DROPDOWN STATE (IMPORTANT FIX)
 
-    page.locator(".select2-selection").first.click()
+    page.keyboard.press("Escape")
+
+    page.wait_for_timeout(500)
+
+    # OPEN CORRECT FIELD
+
+    if label == "Origin":
+
+        page.locator("#select2-FromStationId-container").click()
+
+    else:
+
+        page.locator("#select2-ToStationId-container").click()
 
     page.wait_for_timeout(800)
 
-    # type search
+    # TYPE INTO ACTIVE SEARCH BOX
 
     search = page.locator("input.select2-search__field")
 
@@ -91,17 +103,37 @@ def select_station(page, value, label):
 
     page.wait_for_timeout(1200)
 
-    # click result
+    # WAIT FOR RESULTS
+
+    page.wait_for_selector(".select2-results__option", timeout=5000)
+
+    # CLICK FIRST MATCH
 
     page.locator(".select2-results__option").first.click()
 
     page.wait_for_timeout(1200)
 
-    step(f"✔ {label}: {value}")
+    # VERIFY IMMEDIATELY (IMPORTANT)
+
+    try:
+
+        if label == "Origin":
+
+            val = page.locator("#FromStationId").input_value()
+
+        else:
+
+            val = page.locator("#ToStationId").input_value()
+
+        step(f"DEBUG {label} value: {val}")
+
+    except:
+
+        step(f"⚠️ Cannot verify {label}")
 
 # ======================
 
-# DATE SELECTION (FIXED + COMMIT SAFE)
+# DATE SELECTION
 
 # ======================
 
@@ -117,19 +149,11 @@ def select_date(page):
 
     page.wait_for_timeout(800)
 
-    # IMPORTANT: force JS commit
-
     page.keyboard.press("Tab")
 
     page.wait_for_timeout(1200)
 
-    step(
-
-        f"✔ Date: {TARGET_DATE['day']} "
-
-        f"{TARGET_DATE['month']} {TARGET_DATE['year']}"
-
-    )
+    step(f"✔ Date: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
 
 # ======================
 
@@ -159,13 +183,13 @@ def select_pax(page):
 
 # ======================
 
-# REAL VALIDATION (FIXED)
+# VALIDATION
 
 # ======================
 
 def validate(page):
 
-    step("👉 Validating form (SELECT2 VALUE CHECK)")
+    step("👉 Validating form")
 
     try:
 
@@ -205,7 +229,7 @@ def search(page):
 
     page.wait_for_timeout(12000)
 
-    step("✔ Search completed")
+    step("✔ Search complete")
 
 # ======================
 
@@ -293,11 +317,7 @@ def run():
 
             page.wait_for_timeout(5000)
 
-            # ======================
-
-            # FORM FLOW
-
-            # ======================
+            # FLOW
 
             select_station(page, FROM_STATION, "Origin")
 
@@ -317,19 +337,7 @@ def run():
 
                 return
 
-            # ======================
-
-            # SEARCH
-
-            # ======================
-
             search(page)
-
-            # ======================
-
-            # SCAN
-
-            # ======================
 
             result = scan(page)
 
