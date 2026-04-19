@@ -23,7 +23,7 @@ TARGET_TIME = "21:05"
 
 TIME_WINDOW_MIN = 15
 
-# ======================
+ ======================
 
 # TELEGRAM
 
@@ -69,7 +69,7 @@ def in_window(t):
 
 # ======================
 
-# SELECT2 FIX (FINAL STABLE)
+# SELECT2 FIX (STABLE)
 
 # ======================
 
@@ -77,13 +77,9 @@ def select_station(page, value, label):
 
     step(f"👉 Selecting {label}")
 
-    # reset stale dropdown state
-
     page.keyboard.press("Escape")
 
     page.wait_for_timeout(500)
-
-    # open correct dropdown
 
     if label == "Origin":
 
@@ -95,19 +91,13 @@ def select_station(page, value, label):
 
     page.wait_for_timeout(800)
 
-    # type into active select2 search box
-
     search = page.locator("input.select2-search__field")
 
     search.fill(value)
 
     page.wait_for_timeout(1200)
 
-    # wait results
-
     page.wait_for_selector(".select2-results__option", timeout=5000)
-
-    # select first match
 
     page.locator(".select2-results__option").first.click()
 
@@ -125,7 +115,7 @@ def select_station(page, value, label):
 
             val = page.locator("#ToStationId").input_value()
 
-        step(f"✔ {label} confirmed: {val}")
+        step(f"✔ {label}: {val}")
 
     except:
 
@@ -133,7 +123,7 @@ def select_station(page, value, label):
 
 # ======================
 
-# DATE SELECTION (COMMIT SAFE)
+# DATE FIX (COMMIT SAFE)
 
 # ======================
 
@@ -149,13 +139,11 @@ def select_date(page):
 
     page.wait_for_timeout(800)
 
-    # force JS commit
-
     page.keyboard.press("Tab")
 
     page.wait_for_timeout(1200)
 
-    step(f"✔ Date selected: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
+    step(f"✔ Date: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
 
 # ======================
 
@@ -185,7 +173,7 @@ def select_pax(page):
 
 # ======================
 
-# VALIDATION (REAL BACKEND CHECK)
+# VALIDATION
 
 # ======================
 
@@ -219,7 +207,7 @@ def validate(page):
 
 # ======================
 
-# SEARCH (AJAX SAFE)
+# SEARCH (STATE-BASED FIX)
 
 # ======================
 
@@ -227,61 +215,43 @@ def search(page):
 
     step("👉 Clicking SEARCH")
 
+    old_state = page.inner_text("body")
+
     page.click("button:has-text('Search')")
 
-    # wait for ANY rendering state
+    step("✔ Search clicked, waiting for state change")
 
-    page.wait_for_timeout(5000)
+    # wait for ANY DOM update
 
-    page.wait_for_selector(
+    page.wait_for_function(
 
-        "table, .table, .trip, .result, .results, .container",
+        "old => document.body.innerText !== old",
+
+        old_state,
 
         timeout=30000
 
     )
 
-    step("✔ Search completed (waiting for results render)")
+    page.wait_for_timeout(3000)
+
+    step("✔ Page updated")
 
 # ======================
 
-# SCAN RESULTS (ROBUST)
+# SCAN (ROBUST MODE)
 
 # ======================
 
 def scan(page):
 
-    step("👉 Scanning results (multi-mode)")
+    step("👉 Scanning results")
 
     page.wait_for_timeout(4000)
 
-    selectors = [
+    rows = page.locator("table tr, .trip, .result, .card, .row")
 
-        "table tr",
-
-        ".trip",
-
-        ".result",
-
-        ".results",
-
-        ".table tr"
-
-    ]
-
-    rows = None
-
-    for sel in selectors:
-
-        if page.locator(sel).count() > 0:
-
-            rows = page.locator(sel)
-
-            step(f"✔ Using selector: {sel}")
-
-            break
-
-    if rows is None:
+    if rows.count() == 0:
 
         step("❌ No structured results found → dumping page")
 
@@ -289,17 +259,11 @@ def scan(page):
 
         return "❌ NO RESULTS FOUND"
 
-    n = rows.count()
+    step(f"Rows found: {rows.count()}")
 
-    step(f"Rows found: {n}")
-
-    for i in range(n):
+    for i in range(rows.count()):
 
         text = rows.nth(i).inner_text().lower()
-
-        if "departure" in text:
-
-            continue
 
         times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
 
@@ -337,8 +301,6 @@ def run():
 
             page.wait_for_timeout(8000)
 
-            # popup handling
-
             try:
 
                 page.click("text=Accept")
@@ -346,8 +308,6 @@ def run():
             except:
 
                 pass
-
-            # enter booking
 
             try:
 
