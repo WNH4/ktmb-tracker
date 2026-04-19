@@ -11,22 +11,19 @@ BOT_TOKEN = "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM"
 CHAT_ID = "8240067274"
 
 FROM_STATION = "JB SENTRAL"
-
 TO_STATION = "KLUANG"
 
 TARGET_DATE = {
-
     "day": "21",
-
     "month": "May",
-
     "year": "2026"
-
 }
 
 TARGET_TIME = "21:05"
 
 TIME_WINDOW_MIN = 15
+
+MIN_SEATS = 5
 
 # ======================
 
@@ -120,63 +117,45 @@ def select_station(page, value, label):
 
 # ======================
 
-# DATE SELECT
+# DATE SELECT (DIRECT JS INJECT)
 
 # ======================
 
 def select_date(page):
 
-    step("👉 Selecting DATE")
+    step("👉 Setting DATE (direct inject)")
 
-    page.locator("#OnwardDate").click(force=True)
+    date_str = f"{TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}"
+
+    page.evaluate(
+
+        """
+
+        (value) => {
+
+            const input = document.getElementById('OnwardDate');
+
+            if (!input) throw new Error('OnwardDate not found');
+
+            input.value = value;
+
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+
+        }
+
+        """,
+
+        date_str
+
+    )
 
     page.wait_for_timeout(1500)
 
-    day = TARGET_DATE["day"]
-
-    # click visible day only; KTMB calendar is flaky, so avoid rigid CSS assumptions
-
-    day_candidates = page.locator(f"text={day}")
-
-    if day_candidates.count() == 0:
-
-        raise Exception(f"No day candidate found for {day}")
-
-    clicked = False
-
-    for i in range(day_candidates.count()):
-
-        try:
-
-            candidate = day_candidates.nth(i)
-
-            if candidate.is_visible():
-
-                candidate.click(force=True)
-
-                clicked = True
-
-                break
-
-        except Exception:
-
-            continue
-
-    if not clicked:
-
-        raise Exception(f"Could not click visible day {day}")
-
-    page.wait_for_timeout(1200)
-
-    # force blur / commit
-
-    page.keyboard.press("Escape")
-
-    page.wait_for_timeout(1000)
-
     val = page.locator("#OnwardDate").input_value()
 
-    step(f"✔ Date committed: {val}")
+    step(f"✔ Date committed (JS): {val}")
 
 # ======================
 
@@ -290,7 +269,9 @@ def scan(page):
 
         "div[class*='result']",
 
-        ".card"
+        ".card",
+
+        ".row"
 
     ]
 
@@ -322,6 +303,10 @@ def scan(page):
 
         text = rows.nth(i).inner_text().lower()
 
+        if "departure" in text and "arrival" in text:
+
+            continue
+
         times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
 
         seats_match = re.search(r"available seats?\s*[:\-]?\s*(\d+)", text)
@@ -330,7 +315,7 @@ def scan(page):
 
         for t in times:
 
-            if in_window(t) and seats > 4:
+            if in_window(t) and seats >= MIN_SEATS:
 
                 return f"🚆 MATCH\nTime: {t}\nSeats: {seats}"
 
