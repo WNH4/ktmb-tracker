@@ -16,14 +16,17 @@ FROM_STATION = os.getenv("FROM_STATION", "JB SENTRAL")
 TO_STATION = os.getenv("TO_STATION", "KLUANG")
 
 TRAVEL_DATE = os.getenv("TRAVEL_DATE", "")              # required
-TARGET_TIME = os.getenv("TARGET_TIME", "21:05")         # used by both resale + open_check
+TARGET_TIME = os.getenv("TARGET_TIME", "21:05")         # used by resale + open_check
 MODE = os.getenv("MODE", "resale")                      # resale / open_check
 
 TIME_WINDOW_MIN = int(os.getenv("TIME_WINDOW_MIN", "15"))
 MIN_SEATS = int(os.getenv("MIN_SEATS", "5"))
 
-# open_check gate; leave blank to test immediately
+# for open_check; leave blank to check immediately
 SALE_START_SGT = os.getenv("SALE_START_SGT", "")
+
+# debug telegram messages on/off
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 STATE_DIR = ".state"
 STATE_FILE = os.path.join(STATE_DIR, f"{MODE}_{TRAVEL_DATE}.json")
@@ -44,6 +47,11 @@ def send(msg):
         )
     except Exception:
         pass
+
+
+def debug_send(msg):
+    if DEBUG:
+        send(msg)
 
 
 def log(msg):
@@ -266,12 +274,24 @@ def scan(page):
 # ======================
 def handle_open_check(result):
     if not open_check_active_now():
+        debug_send(
+            f"⏸ Open check not active yet\n"
+            f"Date: {TRAVEL_DATE}\n"
+            f"Gate: {SALE_START_SGT}"
+        )
         return
 
     state = load_state()
     previously_open = state.get("opened", False)
 
     if result["status"] == "OPENED":
+        debug_send(
+            f"DEBUG open_check result\n"
+            f"Date: {TRAVEL_DATE}\n"
+            f"Time: {result['departure']}\n"
+            f"Previously open: {previously_open}"
+        )
+
         if not previously_open:
             send(
                 f"🎉 KTMB TARGET TRIP OPENED\n"
@@ -281,9 +301,15 @@ def handle_open_check(result):
                 f"Seats shown: {result['seats']}\n"
                 f"Fare: {result['fare']}"
             )
+
         state["opened"] = True
         state["last_departure"] = result["departure"]
     else:
+        debug_send(
+            f"⏳ Not open for target window\n"
+            f"Date: {TRAVEL_DATE}\n"
+            f"Target: {TARGET_TIME} ± {TIME_WINDOW_MIN} min"
+        )
         state["opened"] = False
         state["last_departure"] = None
 
@@ -306,6 +332,14 @@ def handle_resale(result):
             or last_departure != current_departure
         )
 
+        debug_send(
+            f"DEBUG resale result\n"
+            f"Date: {TRAVEL_DATE}\n"
+            f"Time: {current_departure}\n"
+            f"Seats: {current_seats}\n"
+            f"Changed: {changed}"
+        )
+
         if changed:
             send(
                 f"🚆 KTMB RETURN CHANGE DETECTED\n"
@@ -323,6 +357,14 @@ def handle_resale(result):
 
     else:
         changed = last_status != "NO_MATCH"
+
+        debug_send(
+            f"❌ No target-window tickets shown\n"
+            f"Date: {TRAVEL_DATE}\n"
+            f"Target: {TARGET_TIME} ± {TIME_WINDOW_MIN} min\n"
+            f"Changed: {changed}"
+        )
+
         if changed:
             send(
                 f"❌ KTMB RETURN UPDATE\n"
@@ -342,6 +384,13 @@ def handle_resale(result):
 # ======================
 def run():
     try:
+        debug_send(
+            f"🚀 Bot started\n"
+            f"Mode: {MODE}\n"
+            f"Date: {TRAVEL_DATE}\n"
+            f"Target: {TARGET_TIME} ± {TIME_WINDOW_MIN} min"
+        )
+
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
