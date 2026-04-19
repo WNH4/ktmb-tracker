@@ -1,4 +1,4 @@
-name: ktmb open kluang
+name: ktmb opening klg
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
       CHAT_ID: "8240067274"
       FROM_STATION: "KLUANG"
       TO_STATION: "JB SENTRAL"
-      TRAVEL_DATE: "2026-07-01"
+      TRAVEL_DATE: "2026-07-02"
       TARGET_TIME: "18:40"
       MODE: "open_check"
       TIME_WINDOW_MIN: "15"
