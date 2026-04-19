@@ -15,18 +15,16 @@ CHAT_ID = os.getenv("CHAT_ID", "8240067274")
 FROM_STATION = os.getenv("FROM_STATION", "JB SENTRAL")
 TO_STATION = os.getenv("TO_STATION", "KLUANG")
 
-TRAVEL_DATE = os.getenv("TRAVEL_DATE", "")          # required
-TARGET_TIME = os.getenv("TARGET_TIME", "21:05")     # resale mode only
-MODE = os.getenv("MODE", "resale")                  # resale / open_check
+TRAVEL_DATE = os.getenv("TRAVEL_DATE", "")              # required
+TARGET_TIME = os.getenv("TARGET_TIME", "21:05")         # used by both resale + open_check
+MODE = os.getenv("MODE", "resale")                      # resale / open_check
 
 TIME_WINDOW_MIN = int(os.getenv("TIME_WINDOW_MIN", "15"))
 MIN_SEATS = int(os.getenv("MIN_SEATS", "5"))
 
-# for open_check:
-# do not notify until this Singapore time is reached
-SALE_START_SGT = os.getenv("SALE_START_SGT", "")    # e.g. 2026-08-01T00:00:00+08:00
+# open_check gate; leave blank to test immediately
+SALE_START_SGT = os.getenv("SALE_START_SGT", "")
 
-# local state file committed back to repo by workflow
 STATE_DIR = ".state"
 STATE_FILE = os.path.join(STATE_DIR, f"{MODE}_{TRAVEL_DATE}.json")
 
@@ -53,7 +51,7 @@ def log(msg):
 
 
 # ======================
-# TIME / DATE HELPERS
+# HELPERS
 # ======================
 def in_window(t):
     fmt = "%H:%M"
@@ -105,7 +103,7 @@ def save_state(data):
 
 
 # ======================
-# STATION SELECT
+# UI INPUTS
 # ======================
 def select_station(page, value, label):
     log(f"Selecting {label}")
@@ -119,19 +117,13 @@ def select_station(page, value, label):
         page.locator("#select2-ToStationId-container").click()
 
     page.wait_for_timeout(800)
-
     page.locator("input.select2-search__field").fill(value)
     page.wait_for_timeout(1200)
-
     page.wait_for_selector(".select2-results__option", timeout=5000)
     page.locator(".select2-results__option").first.click()
-
     page.wait_for_timeout(1800)
 
 
-# ======================
-# DATE SELECT
-# ======================
 def select_date(page):
     log("Setting date")
 
@@ -150,13 +142,9 @@ def select_date(page):
         """,
         date_str
     )
-
     page.wait_for_timeout(1500)
 
 
-# ======================
-# PAX
-# ======================
 def select_pax(page):
     log("Selecting pax")
 
@@ -170,9 +158,6 @@ def select_pax(page):
         pass
 
 
-# ======================
-# VALIDATION
-# ======================
 def validate(page):
     origin = page.locator("#FromStationId").input_value()
     dest = page.locator("#ToStationId").input_value()
@@ -188,9 +173,6 @@ def validate(page):
     return True, "OK"
 
 
-# ======================
-# SEARCH
-# ======================
 def search(page):
     log("Clicking search")
 
@@ -200,7 +182,7 @@ def search(page):
     btn.click()
 
     page.wait_for_load_state("networkidle", timeout=30000)
-    page.wait_for_timeout(6000)
+    page.wait_for_timeout(10000)
 
 
 # ======================
@@ -214,7 +196,6 @@ def scan(page):
     ]
 
     rows = None
-
     for sel in row_selectors:
         loc = page.locator(sel)
         if loc.count() > 0:
@@ -226,21 +207,7 @@ def scan(page):
             return {"status": "NO_MATCH"}
         return {"status": "NOT_OPEN"}
 
-    if MODE == "open_check":
-        for i in range(rows.count()):
-            row = rows.nth(i)
-            cells = row.locator("td")
-            if cells.count() >= 6:
-                departure = cells.nth(1).inner_text().strip()
-                if re.match(r"^\d{2}:\d{2}$", departure):
-                    return {
-                        "status": "OPENED",
-                        "departure": departure
-                    }
-        return {"status": "NOT_OPEN"}
-
-    # resale mode
-    best = None
+    matches = []
 
     for i in range(rows.count()):
         row = rows.nth(i)
@@ -257,24 +224,41 @@ def scan(page):
                 seats = extract_first_int(seats_text)
 
                 if re.match(r"^\d{2}:\d{2}$", departure) and in_window(departure):
-                    candidate = {
-                        "status": "MATCH",
+                    matches.append({
                         "service": service,
                         "departure": departure,
                         "arrival": arrival,
                         "seats": seats,
                         "fare": fare
-                    }
-
-                    if best is None or seats > best["seats"]:
-                        best = candidate
+                    })
             except Exception:
                 pass
 
-    if best is None:
-        return {"status": "NO_MATCH"}
+    if not matches:
+        if MODE == "resale":
+            return {"status": "NO_MATCH"}
+        return {"status": "NOT_OPEN"}
 
-    return best
+    best = max(matches, key=lambda x: x["seats"])
+
+    if MODE == "open_check":
+        return {
+            "status": "OPENED",
+            "service": best["service"],
+            "departure": best["departure"],
+            "arrival": best["arrival"],
+            "seats": best["seats"],
+            "fare": best["fare"]
+        }
+
+    return {
+        "status": "MATCH",
+        "service": best["service"],
+        "departure": best["departure"],
+        "arrival": best["arrival"],
+        "seats": best["seats"],
+        "fare": best["fare"]
+    }
 
 
 # ======================
@@ -290,14 +274,18 @@ def handle_open_check(result):
     if result["status"] == "OPENED":
         if not previously_open:
             send(
-                f"🎉 KTMB TICKETS OPENED\n"
+                f"🎉 KTMB TARGET TRIP OPENED\n"
                 f"Date: {TRAVEL_DATE}\n"
-                f"First train found: {result['departure']}"
+                f"Time: {result['departure']}\n"
+                f"Arrival: {result['arrival']}\n"
+                f"Seats shown: {result['seats']}\n"
+                f"Fare: {result['fare']}"
             )
         state["opened"] = True
         state["last_departure"] = result["departure"]
     else:
         state["opened"] = False
+        state["last_departure"] = None
 
     save_state(state)
 
@@ -336,7 +324,11 @@ def handle_resale(result):
     else:
         changed = last_status != "NO_MATCH"
         if changed:
-            send(f"❌ KTMB RETURN UPDATE\nDate: {TRAVEL_DATE}\nNo tickets currently shown")
+            send(
+                f"❌ KTMB RETURN UPDATE\n"
+                f"Date: {TRAVEL_DATE}\n"
+                f"No tickets currently shown"
+            )
 
         state["last_status"] = "NO_MATCH"
         state["last_seats"] = None
