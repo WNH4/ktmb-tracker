@@ -58,7 +58,85 @@ def in_time_window(train_time):
 
 # ======================
 
-# SAFE SCAN (TABLE BASED)
+# SELECT STATION (SELECT2)
+
+# ======================
+
+def select_station(page, index, value):
+
+    try:
+
+        containers = page.locator(".select2-container")
+
+        containers.nth(index).click(force=True)
+
+        page.wait_for_timeout(1000)
+
+        page.keyboard.type(value)
+
+        page.wait_for_timeout(1000)
+
+        page.keyboard.press("ArrowDown")
+
+        page.keyboard.press("Enter")
+
+    except:
+
+        pass
+
+# ======================
+
+# SELECT DATE (CRITICAL FIX)
+
+# ======================
+
+def select_date(page):
+
+    try:
+
+        # click date field
+
+        page.locator("#OnwardDate").click(force=True)
+
+        page.wait_for_timeout(1500)
+
+        # click day in calendar
+
+        page.click(f"text={TARGET_DATE['day']}", timeout=8000)
+
+        send(f"📅 Date selected: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
+
+    except Exception as e:
+
+        send(f"⚠️ Date selection failed: {str(e)}")
+
+# ======================
+
+# SELECT PAX
+
+# ======================
+
+def select_pax(page):
+
+    try:
+
+        page.click("text=Pax", timeout=5000)
+
+        page.wait_for_timeout(500)
+
+        page.keyboard.type("1")
+
+        page.keyboard.press("ArrowDown")
+
+        page.keyboard.press("Enter")
+
+    except:
+
+        pass
+
+# ======================
+
+# SCAN TABLE
 
 # ======================
 
@@ -70,15 +148,11 @@ def scan(page):
 
         if tables.count() == 0:
 
-            return "⚠️ No table found (likely not on results page)"
+            return "⚠️ No table found (not on results page)"
 
         rows = page.locator("table tr")
 
         count = rows.count()
-
-        if count == 0:
-
-            return "⚠️ Table found but no rows"
 
         for i in range(count):
 
@@ -94,11 +168,7 @@ def scan(page):
 
                 continue
 
-            # extract time
-
             times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
-
-            # extract seats (simple)
 
             seats_match = re.search(r"(\d+)", text)
 
@@ -134,17 +204,13 @@ def run():
 
             send("🚀 BOT STARTED")
 
-            # ======================
-
-            # OPEN SITE
-
-            # ======================
+            # open site
 
             page.goto("https://online.ktmb.com.my")
 
             page.wait_for_timeout(8000)
 
-            # accept popup
+            # popup
 
             try:
 
@@ -154,7 +220,7 @@ def run():
 
                 pass
 
-            # go to booking
+            # booking
 
             try:
 
@@ -168,21 +234,23 @@ def run():
 
             # ======================
 
-            # DEBUG INFO
+            # FORM (NOW COMPLETE)
 
             # ======================
 
-            current_url = page.url
+            select_station(page, 0, FROM_STATION)
 
-            page_text = page.inner_text("body")[:500]
+            select_station(page, 1, TO_STATION)
 
-            send(f"📍 URL: {current_url}")
+            select_date(page)
 
-            send(f"🧾 Page Preview:\n{page_text}")
+            select_pax(page)
+
+            page.wait_for_timeout(2000)
 
             # ======================
 
-            # TRY SEARCH (fallback only)
+            # SEARCH
 
             # ======================
 
@@ -192,11 +260,11 @@ def run():
 
                 page.wait_for_timeout(8000)
 
-                send("🔍 Search clicked")
+                send("🔍 Search triggered")
 
             except:
 
-                send("⚠️ Search button not clicked")
+                send("⚠️ Search click failed")
 
             # ======================
 
@@ -214,8 +282,6 @@ def run():
 
         send(f"🔥 BOT ERROR\n{str(e)}")
 
-        print("ERROR:", e)
-
 # ======================
 
 # RUN
@@ -223,4 +289,3 @@ def run():
 # ======================
 
 run()
-
