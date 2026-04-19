@@ -53,7 +53,7 @@ def step(msg):
 
 # ======================
 
-# TIME CHECK
+# TIME FILTER
 
 # ======================
 
@@ -69,7 +69,7 @@ def in_window(t):
 
 # ======================
 
-# SELECT STATION (FIXED COMMIT LOGIC)
+# STATION SELECT (FIXED SELECT2 COMMIT)
 
 # ======================
 
@@ -79,7 +79,7 @@ def select_station(page, value, label):
 
     page.keyboard.press("Escape")
 
-    page.wait_for_timeout(500)
+    page.wait_for_timeout(600)
 
     if label == "Origin":
 
@@ -97,11 +97,9 @@ def select_station(page, value, label):
 
     page.locator(".select2-results__option").first.click()
 
-    # 🔥 IMPORTANT: allow Select2 commit
+    # 🔥 IMPORTANT: allow Select2 to commit value
 
     page.wait_for_timeout(1800)
-
-    # verify hidden value is updated
 
     if label == "Origin":
 
@@ -115,7 +113,7 @@ def select_station(page, value, label):
 
 # ======================
 
-# DATE SELECTION (FIXED COMMIT)
+# DATE SELECT (FIXED - REAL CLICK TARGET)
 
 # ======================
 
@@ -125,17 +123,27 @@ def select_date(page):
 
     page.locator("#OnwardDate").click(force=True)
 
+    page.wait_for_timeout(1500)
+
+    day = TARGET_DATE["day"]
+
+    # 🔥 click actual enabled date cell
+
+    date_cell = page.locator(
+
+        f".ui-datepicker-calendar td:not(.ui-state-disabled) a:text('{day}')"
+
+    )
+
+    date_cell.first.click()
+
     page.wait_for_timeout(1200)
 
-    page.click(f"text={TARGET_DATE['day']}")
+    # force close calendar (commits state)
 
-    page.wait_for_timeout(800)
+    page.keyboard.press("Escape")
 
-    # force blur so value commits internally
-
-    page.keyboard.press("Tab")
-
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(1000)
 
     val = page.locator("#OnwardDate").input_value()
 
@@ -171,7 +179,7 @@ def select_pax(page):
 
 # ======================
 
-# FINAL VALIDATION
+# VALIDATION (CRITICAL DEBUG POINT)
 
 # ======================
 
@@ -207,7 +215,7 @@ def validate(page):
 
 # ======================
 
-# SEARCH (FIXED WAIT LOGIC)
+# SEARCH
 
 # ======================
 
@@ -223,8 +231,6 @@ def search(page):
 
     btn.click()
 
-    # 🔥 KEY FIX: wait for actual request/render cycle
-
     page.wait_for_load_state("networkidle", timeout=30000)
 
     page.wait_for_timeout(6000)
@@ -233,7 +239,7 @@ def search(page):
 
 # ======================
 
-# SCAN RESULTS (ROBUST)
+# SCAN RESULTS
 
 # ======================
 
@@ -311,7 +317,7 @@ def run():
 
     try:
 
-        step("🚀 BOT STARTED (FINAL STABLE MODE)")
+        step("🚀 BOT STARTED (FINAL STABLE VERSION)")
 
         with sync_playwright() as p:
 
