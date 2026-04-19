@@ -53,7 +53,7 @@ def step(msg):
 
 # ======================
 
-# TIME FILTER
+# TIME CHECK
 
 # ======================
 
@@ -69,7 +69,7 @@ def in_window(t):
 
 # ======================
 
-# STATION SELECT
+# SELECT STATION (FIXED COMMIT LOGIC)
 
 # ======================
 
@@ -97,11 +97,25 @@ def select_station(page, value, label):
 
     page.locator(".select2-results__option").first.click()
 
-    page.wait_for_timeout(1000)
+    # 🔥 IMPORTANT: allow Select2 commit
+
+    page.wait_for_timeout(1800)
+
+    # verify hidden value is updated
+
+    if label == "Origin":
+
+        val = page.locator("#FromStationId").input_value()
+
+    else:
+
+        val = page.locator("#ToStationId").input_value()
+
+    step(f"✔ {label} committed: {val}")
 
 # ======================
 
-# DATE FIX (IMPORTANT)
+# DATE SELECTION (FIXED COMMIT)
 
 # ======================
 
@@ -109,35 +123,91 @@ def select_date(page):
 
     step("👉 Selecting DATE")
 
-    date_text = f"{TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}"
-
-    # open calendar
-
     page.locator("#OnwardDate").click(force=True)
 
     page.wait_for_timeout(1200)
-
-    # click day
 
     page.click(f"text={TARGET_DATE['day']}")
 
     page.wait_for_timeout(800)
 
-    # IMPORTANT: force blur so value commits
+    # force blur so value commits internally
 
     page.keyboard.press("Tab")
 
-    page.wait_for_timeout(1000)
-
-    # verify
+    page.wait_for_timeout(1500)
 
     val = page.locator("#OnwardDate").input_value()
 
-    step(f"✔ Date selected: {val}")
+    step(f"✔ Date committed: {val}")
 
 # ======================
 
-# SEARCH
+# PAX (SAFE DEFAULT)
+
+# ======================
+
+def select_pax(page):
+
+    step("👉 Selecting PAX")
+
+    try:
+
+        page.click("text=Pax")
+
+        page.wait_for_timeout(500)
+
+        page.keyboard.type("1")
+
+        page.keyboard.press("Enter")
+
+        page.wait_for_timeout(800)
+
+        step("✔ Pax = 1")
+
+    except:
+
+        step("⚠️ Pax default used")
+
+# ======================
+
+# FINAL VALIDATION
+
+# ======================
+
+def validate(page):
+
+    step("👉 Final validation")
+
+    origin = page.locator("#FromStationId").input_value()
+
+    dest = page.locator("#ToStationId").input_value()
+
+    date = page.locator("#OnwardDate").input_value()
+
+    step(f"DEBUG origin: {origin}")
+
+    step(f"DEBUG dest: {dest}")
+
+    step(f"DEBUG date: {date}")
+
+    if not origin:
+
+        return False, "Origin missing"
+
+    if not dest:
+
+        return False, "Destination missing"
+
+    if not date:
+
+        return False, "Date missing"
+
+    return True, "OK"
+
+# ======================
+
+# SEARCH (FIXED WAIT LOGIC)
 
 # ======================
 
@@ -145,17 +215,25 @@ def search(page):
 
     step("👉 Clicking SEARCH")
 
-    page.click("button:has-text('Search')")
+    btn = page.locator("button:has-text('Search')")
+
+    btn.scroll_into_view_if_needed()
+
+    page.wait_for_timeout(800)
+
+    btn.click()
+
+    # 🔥 KEY FIX: wait for actual request/render cycle
 
     page.wait_for_load_state("networkidle", timeout=30000)
 
-    page.wait_for_timeout(5000)
+    page.wait_for_timeout(6000)
 
     step("✔ Search completed")
 
 # ======================
 
-# SCAN
+# SCAN RESULTS (ROBUST)
 
 # ======================
 
@@ -167,7 +245,7 @@ def scan(page):
 
         "table tbody tr",
 
-        ".table tr",
+        "table tr",
 
         ".trip",
 
@@ -175,7 +253,9 @@ def scan(page):
 
         "div[class*='trip']",
 
-        "div[class*='result']"
+        "div[class*='result']",
+
+        ".card"
 
     ]
 
@@ -231,7 +311,7 @@ def run():
 
     try:
 
-        step("🚀 BOT STARTED")
+        step("🚀 BOT STARTED (FINAL STABLE MODE)")
 
         with sync_playwright() as p:
 
@@ -265,9 +345,19 @@ def run():
 
             select_station(page, TO_STATION, "Destination")
 
-            # ✅ DATE (FIXED PROPERLY)
-
             select_date(page)
+
+            select_pax(page)
+
+            ok, reason = validate(page)
+
+            step(f"✔ VALIDATION: {reason}")
+
+            if not ok:
+
+                send(f"❌ FORM INVALID: {reason}")
+
+                return
 
             search(page)
 
