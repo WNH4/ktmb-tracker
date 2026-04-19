@@ -61,15 +61,15 @@ def in_window(t):
 
     fmt = "%H:%M"
 
-    t1 = datetime.strptime(t, fmt)
+    a = datetime.strptime(t, fmt)
 
-    t2 = datetime.strptime(TARGET_TIME, fmt)
+    b = datetime.strptime(TARGET_TIME, fmt)
 
-    return abs((t1 - t2).total_seconds()) <= TIME_WINDOW_MIN * 60
+    return abs((a - b).total_seconds()) <= TIME_WINDOW_MIN * 60
 
 # ======================
 
-# SELECT2 FIX (CRITICAL)
+# SELECT2 FIX (STABLE)
 
 # ======================
 
@@ -77,31 +77,31 @@ def select_station(page, value, label):
 
     step(f"👉 Selecting {label}")
 
-    # open dropdown properly
+    # open dropdown
 
     page.locator(".select2-selection").first.click()
 
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(800)
 
-    # type into real search input
+    # type search
 
     search = page.locator("input.select2-search__field")
 
     search.fill(value)
 
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(1200)
 
-    # click first result
+    # click result
 
     page.locator(".select2-results__option").first.click()
 
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(1200)
 
     step(f"✔ {label}: {value}")
 
 # ======================
 
-# DATE (FULL DAY + MONTH + YEAR FIXED)
+# DATE SELECTION (FIXED + COMMIT SAFE)
 
 # ======================
 
@@ -109,29 +109,25 @@ def select_date(page):
 
     step("👉 Selecting DATE")
 
-    # open calendar
-
     page.locator("#OnwardDate").click(force=True)
 
-    page.wait_for_timeout(1500)
-
-    # click day
+    page.wait_for_timeout(1200)
 
     page.click(f"text={TARGET_DATE['day']}")
 
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(800)
 
-    # FORCE JS commit (THIS IS THE KEY FIX YOU WERE MISSING)
+    # IMPORTANT: force JS commit
 
     page.keyboard.press("Tab")
 
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(1200)
 
     step(
 
-        f"✔ Date selected: "
+        f"✔ Date: {TARGET_DATE['day']} "
 
-        f"{TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}"
+        f"{TARGET_DATE['month']} {TARGET_DATE['year']}"
 
     )
 
@@ -163,27 +159,35 @@ def select_pax(page):
 
 # ======================
 
-# VALIDATION (IMPORTANT SAFETY CHECK)
+# REAL VALIDATION (FIXED)
 
 # ======================
 
 def validate(page):
 
-    step("👉 Validating form")
+    step("👉 Validating form (SELECT2 VALUE CHECK)")
 
-    body = page.inner_text("body")
+    try:
 
-    if "Select Origin" in body:
+        origin = page.locator("#FromStationId").input_value()
 
-        return False, "Origin not selected"
+        dest = page.locator("#ToStationId").input_value()
 
-    if "Select Destination" in body:
+    except:
 
-        return False, "Destination not selected"
+        return False, "Cannot read Select2 values"
 
-    if TARGET_DATE["day"] not in body:
+    step(f"DEBUG origin: {origin}")
 
-        return False, "Date not committed"
+    step(f"DEBUG dest: {dest}")
+
+    if not origin:
+
+        return False, "Origin NOT selected"
+
+    if not dest:
+
+        return False, "Destination NOT selected"
 
     return True, "OK"
 
@@ -201,11 +205,11 @@ def search(page):
 
     page.wait_for_timeout(12000)
 
-    step("✔ Search complete")
+    step("✔ Search completed")
 
 # ======================
 
-# SCAN TABLE
+# SCAN RESULTS
 
 # ======================
 
@@ -215,7 +219,7 @@ def scan(page):
 
     if page.locator("table").count() == 0:
 
-        return "❌ NO TABLE FOUND (search failed)"
+        return "❌ NO TABLE FOUND"
 
     rows = page.locator("table tr")
 
@@ -243,7 +247,7 @@ def scan(page):
 
                 return f"🚆 MATCH\nTime: {t}\nSeats: {seats}"
 
-    return "❌ No matching trains"
+    return "❌ No match"
 
 # ======================
 
