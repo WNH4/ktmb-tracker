@@ -1,5 +1,4 @@
 import requests
-import time
 from datetime import datetime
 
 # ======================
@@ -8,20 +7,27 @@ from datetime import datetime
 BOT_TOKEN = "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM"
 CHAT_ID = "8240067274"
 
-FROM_STATION = "JB Sentral"
-TO_STATION = "Kluang"
-
 FROM_STATION = "JB SENTRAL"
 
 TO_STATION = "KLUANG"
 
-TRAVEL_DATE = "2026-05-21"   # YYYY-MM-DD format (IMPORTANT)
+TRAVEL_DATE = "2026-05-21"   # YYYY-MM-DD
 
 TARGET_TIME = "21:05"
 
 TIME_WINDOW_MIN = 15
 
-BASE_URL = "https://online.ktmb.com.my/api"  # inferred endpoint pattern
+STATION_MAP = {
+
+    "JB SENTRAL": "41",
+
+    "KLUANG": "45",
+
+}
+
+# this endpoint was previously guessed and returned 404
+
+SEARCH_URL = "https://online.ktmb.com.my/ktmb-api/search"
 
 # ======================
 
@@ -29,7 +35,7 @@ BASE_URL = "https://online.ktmb.com.my/api"  # inferred endpoint pattern
 
 # ======================
 
-def send(msg):
+def send(msg: str) -> None:
 
     try:
 
@@ -37,15 +43,17 @@ def send(msg):
 
             f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
 
-            data={"chat_id": CHAT_ID, "text": msg}
+            data={"chat_id": CHAT_ID, "text": msg},
+
+            timeout=20,
 
         )
 
-    except:
+    except Exception:
 
         pass
 
-def step(msg):
+def step(msg: str) -> None:
 
     print(msg)
 
@@ -57,7 +65,7 @@ def step(msg):
 
 # ======================
 
-def in_window(t):
+def in_window(t: str) -> bool:
 
     fmt = "%H:%M"
 
@@ -69,27 +77,11 @@ def in_window(t):
 
 # ======================
 
-# MAP STATION NAME → ID (YOU MAY NEED ADJUSTMENT ONCE)
-
-# ======================
-
-STATION_MAP = {
-
-    "JB SENTRAL": "41",
-
-    "KLUANG": "45"
-
-}
-
-# ======================
-
-# CORE API CALL (SNIPER MODE)
+# FETCH
 
 # ======================
 
 def fetch_trains():
-
-    step("🚀 Fetching KTMB API data (sniper mode)")
 
     payload = {
 
@@ -99,7 +91,7 @@ def fetch_trains():
 
         "date": TRAVEL_DATE,
 
-        "passengers": 1
+        "passengers": 1,
 
     }
 
@@ -109,112 +101,104 @@ def fetch_trains():
 
         "Accept": "application/json, text/plain, */*",
 
-        "Referer": "https://online.ktmb.com.my/"
+        "Referer": "https://online.ktmb.com.my/",
 
     }
 
-    # ⚠️ This endpoint may differ slightly — adjust if needed
+    step("🚀 KTMB diagnostic started")
+
+    step(f"Route: {FROM_STATION} → {TO_STATION}")
+
+    step(f"Date: {TRAVEL_DATE}")
+
+    step(f"Target time: {TARGET_TIME} ± {TIME_WINDOW_MIN} min")
 
     r = requests.get(
 
-        "https://online.ktmb.com.my/ktmb-api/search",
+        SEARCH_URL,
 
         params=payload,
 
         headers=headers,
 
-        timeout=20
+        timeout=20,
 
     )
 
     step(f"HTTP STATUS: {r.status_code}")
 
+    step(f"FINAL URL: {r.url}")
+
+    return r
+
+# ======================
+
+# PARSE
+
+# ======================
+
+def parse_response(r: requests.Response) -> str:
+
+    if r.status_code == 404:
+
+        return (
+
+            "❌ Endpoint returned 404.\n"
+
+            "This means the current script is calling a guessed KTMB endpoint, not a real public API.\n"
+
+            "This tracker will not work until the real request is captured."
+
+        )
+
     if r.status_code != 200:
 
-        return None
+        return f"❌ Unexpected HTTP status: {r.status_code}"
 
-    try:
+    content_type = r.headers.get("content-type", "").lower()
 
-        return r.json()
-
-    except:
-
-        step("❌ Response not JSON")
-
-        return None
-
-# ======================
-
-# PARSE RESULTS
-
-# ======================
-
-def parse(data):
-
-    step("👉 Parsing results")
-
-    if not data:
-
-        return "❌ NO DATA"
-
-    results = data.get("trains", []) or data.get("data", [])
-
-    matches = []
-
-    for t in results:
+    if "json" in content_type:
 
         try:
 
-            dep = t.get("departure_time")
+            data = r.json()
 
-            seats = int(t.get("available_seats", 0))
+        except Exception as e:
 
-            if dep and seats:
+            return f"❌ Response claimed JSON but could not parse: {e}"
 
-                if in_window(dep) and seats > 4:
+        return f"ℹ️ JSON received.\nTop-level keys: {list(data)[:10]}"
 
-                    matches.append(f"{dep} | seats: {seats}")
+    text = r.text[:1200]
 
-        except:
+    return (
 
-            continue
+        "ℹ️ Non-JSON response received.\n"
 
-    if not matches:
+        f"Content-Type: {content_type or 'unknown'}\n\n"
 
-        return "❌ No match"
+        f"Body preview:\n{text}"
 
-    return "🚆 MATCH FOUND\n" + "\n".join(matches)
+    )
 
 # ======================
 
-# MAIN LOOP (TRACKER MODE)
+# MAIN
 
 # ======================
 
 def run():
 
-    step("🔥 KTMB API SNIPER STARTED")
+    try:
 
-    while True:
+        response = fetch_trains()
 
-        try:
+        result = parse_response(response)
 
-            data = fetch_trains()
+        step(result)
 
-            result = parse(data)
+    except Exception as e:
 
-            step(result)
-
-            if "MATCH" in result:
-
-                send(result)
-
-            time.sleep(60)  # poll every 60 seconds
-
-        except Exception as e:
-
-            send(f"🔥 ERROR\n{str(e)}")
-
-            time.sleep(30)
+        step(f"🔥 ERROR\n{str(e)}")
 
 run()
