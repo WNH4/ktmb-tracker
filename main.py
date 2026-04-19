@@ -53,7 +53,7 @@ def step(msg):
 
 # ======================
 
-# TIME CHECK
+# TIME FILTER
 
 # ======================
 
@@ -69,7 +69,7 @@ def in_window(t):
 
 # ======================
 
-# SELECT2 FIX (STABLE)
+# SELECT STATION (SAFE SELECT2)
 
 # ======================
 
@@ -101,29 +101,13 @@ def select_station(page, value, label):
 
     page.locator(".select2-results__option").first.click()
 
-    page.wait_for_timeout(1200)
+    page.wait_for_timeout(1000)
 
-    # verify backend value
-
-    try:
-
-        if label == "Origin":
-
-            val = page.locator("#FromStationId").input_value()
-
-        else:
-
-            val = page.locator("#ToStationId").input_value()
-
-        step(f"✔ {label}: {val}")
-
-    except:
-
-        step(f"⚠️ {label} verification failed")
+    step(f"✔ {label} selected")
 
 # ======================
 
-# DATE FIX (COMMIT SAFE)
+# DATE
 
 # ======================
 
@@ -133,7 +117,7 @@ def select_date(page):
 
     page.locator("#OnwardDate").click(force=True)
 
-    page.wait_for_timeout(1200)
+    page.wait_for_timeout(1000)
 
     page.click(f"text={TARGET_DATE['day']}")
 
@@ -141,9 +125,9 @@ def select_date(page):
 
     page.keyboard.press("Tab")
 
-    page.wait_for_timeout(1200)
+    page.wait_for_timeout(1000)
 
-    step(f"✔ Date: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
+    step(f"✔ Date set: {TARGET_DATE['day']} {TARGET_DATE['month']} {TARGET_DATE['year']}")
 
 # ======================
 
@@ -169,115 +153,111 @@ def select_pax(page):
 
     except:
 
-        step("⚠️ Pax skipped")
+        step("⚠️ Pax defaulted")
 
 # ======================
 
-# VALIDATION
+# API INTERCEPT ENGINE
 
 # ======================
 
-def validate(page):
+def capture_api(page):
 
-    step("👉 Validating form")
+    step("🚀 Capturing KTMB API response")
 
-    try:
+    captured = {}
 
-        origin = page.locator("#FromStationId").input_value()
+    def on_response(response):
 
-        dest = page.locator("#ToStationId").input_value()
+        try:
 
-    except:
+            url = response.url.lower()
 
-        return False, "Cannot read Select2 values"
+            # KTMB endpoints are usually XHR/fetch
 
-    step(f"DEBUG origin: {origin}")
+            if any(k in url for k in ["search", "trip", "schedule", "availability"]):
 
-    step(f"DEBUG dest: {dest}")
+                if response.status == 200:
 
-    if not origin:
+                    try:
 
-        return False, "Origin NOT selected"
+                        captured["data"] = response.json()
 
-    if not dest:
+                        step(f"✔ Captured API: {url}")
 
-        return False, "Destination NOT selected"
+                    except:
 
-    return True, "OK"
+                        pass
 
-# ======================
+        except:
 
-# SEARCH (STATE-BASED FIX)
+            pass
 
-# ======================
-
-def search(page):
-
-    step("👉 Clicking SEARCH")
-
-    old_state = page.inner_text("body")
+    page.on("response", on_response)
 
     page.click("button:has-text('Search')")
 
-    step("✔ Search clicked, waiting for state change")
+    page.wait_for_timeout(8000)
 
-    # wait for ANY DOM update
-
-    page.wait_for_function(
-
-        "old => document.body.innerText !== old",
-
-        old_state,
-
-        timeout=30000
-
-    )
-
-    page.wait_for_timeout(3000)
-
-    step("✔ Page updated")
+    return captured.get("data")
 
 # ======================
 
-# SCAN (ROBUST MODE)
+# PARSE API DATA
 
 # ======================
 
-def scan(page):
+def parse(api_data):
 
-    step("👉 Scanning results")
+    step("👉 Parsing API response")
 
-    page.wait_for_timeout(4000)
+    results = []
 
-    rows = page.locator("table tr, .trip, .result, .card, .row")
+    try:
 
-    if rows.count() == 0:
+        trips = (
 
-        step("❌ No structured results found → dumping page")
+            api_data.get("data")
 
-        step(page.inner_text("body")[:2000])
+            or api_data.get("trips")
 
-        return "❌ NO RESULTS FOUND"
+            or api_data.get("result")
 
-    step(f"Rows found: {rows.count()}")
+            or api_data
 
-    for i in range(rows.count()):
+        )
 
-        text = rows.nth(i).inner_text().lower()
+        for trip in trips:
 
-        times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+            try:
 
-        seats = re.search(r"(\d+)", text)
+                time = trip.get("departureTime") or trip.get("departure") or ""
 
-        seats = int(seats.group(1)) if seats else 0
+                seats = trip.get("availableSeats") or trip.get("seats") or 0
 
-        for t in times:
+                if not time:
 
-            if in_window(t) and seats > 4:
+                    continue
 
-                return f"🚆 MATCH\nTime: {t}\nSeats: {seats}"
+                if in_window(time) and int(seats) > 4:
 
-    return "❌ No matching trains"
+                    results.append({
+
+                        "time": time,
+
+                        "seats": seats
+
+                    })
+
+            except:
+
+                continue
+
+    except Exception as e:
+
+        step(f"⚠️ Parse error: {e}")
+
+    return results
 
 # ======================
 
@@ -289,7 +269,7 @@ def run():
 
     try:
 
-        step("🚀 BOT STARTED")
+        step("🚀 BOT STARTED (API MODE)")
 
         with sync_playwright() as p:
 
@@ -329,21 +309,39 @@ def run():
 
             select_pax(page)
 
-            ok, reason = validate(page)
+            # API MODE SEARCH
 
-            step(f"✔ VALIDATION: {reason}")
+            api_data = capture_api(page)
 
-            if not ok:
+            if not api_data:
 
-                send(f"❌ FORM INVALID: {reason}")
+                send("❌ No API response captured")
+
+                browser.close()
 
                 return
 
-            search(page)
+            trips = parse(api_data)
 
-            result = scan(page)
+            if not trips:
 
-            send(result)
+                send("❌ No matching trains found")
+
+                browser.close()
+
+                return
+
+            best = trips[0]
+
+            send(
+
+                f"🚆 MATCH FOUND\n"
+
+                f"Time: {best['time']}\n"
+
+                f"Seats: {best['seats']}"
+
+            )
 
             browser.close()
 
