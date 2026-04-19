@@ -15,7 +15,7 @@ jobs:
       CHAT_ID: "8240067274"
       FROM_STATION: "JB SENTRAL"
       TO_STATION: "KLUANG"
-      TRAVEL_DATE: "2026-04-30"
+      TRAVEL_DATE: "2026-05-30"
       TARGET_TIME: "21:05"
       MODE: "resale"
       TIME_WINDOW_MIN: "15"
