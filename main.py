@@ -1,4 +1,8 @@
+from playwright.sync_api import sync_playwright
 import requests
+import traceback
+import re
+from datetime import datetime
 
 # ======================
 # CONFIG
@@ -10,15 +14,27 @@ FROM_STATION = "JB SENTRAL"
 
 TO_STATION = "KLUANG"
 
-TRAVEL_DATE = "2026-05-21"
+TARGET_DATE = {
+
+    "day": "21",
+
+    "month": "May",
+
+    "year": "2026"
+
+}
 
 TARGET_TIME = "21:05"
 
 TIME_WINDOW_MIN = 15
 
-SEARCH_URL = "https://online.ktmb.com.my/ktmb-api/search"
+# ======================
 
-def send(msg: str) -> None:
+# TELEGRAM
+
+# ======================
+
+def send(msg):
 
     try:
 
@@ -28,7 +44,7 @@ def send(msg: str) -> None:
 
             data={"chat_id": CHAT_ID, "text": msg},
 
-            timeout=20,
+            timeout=20
 
         )
 
@@ -36,74 +52,360 @@ def send(msg: str) -> None:
 
         pass
 
+def step(msg):
+
+    print(msg)
+
+    send(msg)
+
+# ======================
+
+# TIME FILTER
+
+# ======================
+
+def in_window(t):
+
+    fmt = "%H:%M"
+
+    a = datetime.strptime(t, fmt)
+
+    b = datetime.strptime(TARGET_TIME, fmt)
+
+    return abs((a - b).total_seconds()) <= TIME_WINDOW_MIN * 60
+
+# ======================
+
+# STATION SELECT
+
+# ======================
+
+def select_station(page, value, label):
+
+    step(f"👉 Selecting {label}")
+
+    page.keyboard.press("Escape")
+
+    page.wait_for_timeout(600)
+
+    if label == "Origin":
+
+        page.locator("#select2-FromStationId-container").click()
+
+    else:
+
+        page.locator("#select2-ToStationId-container").click()
+
+    page.wait_for_timeout(800)
+
+    page.locator("input.select2-search__field").fill(value)
+
+    page.wait_for_timeout(1200)
+
+    page.wait_for_selector(".select2-results__option", timeout=5000)
+
+    page.locator(".select2-results__option").first.click()
+
+    page.wait_for_timeout(1800)
+
+    if label == "Origin":
+
+        val = page.locator("#FromStationId").input_value()
+
+    else:
+
+        val = page.locator("#ToStationId").input_value()
+
+    step(f"✔ {label} committed: {val}")
+
+# ======================
+
+# DATE SELECT
+
+# ======================
+
+def select_date(page):
+
+    step("👉 Selecting DATE")
+
+    page.locator("#OnwardDate").click(force=True)
+
+    page.wait_for_timeout(1500)
+
+    day = TARGET_DATE["day"]
+
+    # click visible day only; KTMB calendar is flaky, so avoid rigid CSS assumptions
+
+    day_candidates = page.locator(f"text={day}")
+
+    if day_candidates.count() == 0:
+
+        raise Exception(f"No day candidate found for {day}")
+
+    clicked = False
+
+    for i in range(day_candidates.count()):
+
+        try:
+
+            candidate = day_candidates.nth(i)
+
+            if candidate.is_visible():
+
+                candidate.click(force=True)
+
+                clicked = True
+
+                break
+
+        except Exception:
+
+            continue
+
+    if not clicked:
+
+        raise Exception(f"Could not click visible day {day}")
+
+    page.wait_for_timeout(1200)
+
+    # force blur / commit
+
+    page.keyboard.press("Escape")
+
+    page.wait_for_timeout(1000)
+
+    val = page.locator("#OnwardDate").input_value()
+
+    step(f"✔ Date committed: {val}")
+
+# ======================
+
+# PAX
+
+# ======================
+
+def select_pax(page):
+
+    step("👉 Selecting PAX")
+
+    try:
+
+        page.click("text=Pax")
+
+        page.wait_for_timeout(500)
+
+        page.keyboard.type("1")
+
+        page.keyboard.press("Enter")
+
+        page.wait_for_timeout(800)
+
+        step("✔ Pax = 1")
+
+    except Exception:
+
+        step("⚠️ Pax default used")
+
+# ======================
+
+# VALIDATION
+
+# ======================
+
+def validate(page):
+
+    step("👉 Final validation")
+
+    origin = page.locator("#FromStationId").input_value()
+
+    dest = page.locator("#ToStationId").input_value()
+
+    date = page.locator("#OnwardDate").input_value()
+
+    step(f"DEBUG origin: {origin}")
+
+    step(f"DEBUG dest: {dest}")
+
+    step(f"DEBUG date: {date}")
+
+    if not origin:
+
+        return False, "Origin missing"
+
+    if not dest:
+
+        return False, "Destination missing"
+
+    if not date:
+
+        return False, "Date missing"
+
+    return True, "OK"
+
+# ======================
+
+# SEARCH
+
+# ======================
+
+def search(page):
+
+    step("👉 Clicking SEARCH")
+
+    btn = page.locator("button:has-text('Search')")
+
+    btn.scroll_into_view_if_needed()
+
+    page.wait_for_timeout(800)
+
+    btn.click()
+
+    page.wait_for_load_state("networkidle", timeout=30000)
+
+    page.wait_for_timeout(6000)
+
+    step("✔ Search completed")
+
+# ======================
+
+# SCAN RESULTS
+
+# ======================
+
+def scan(page):
+
+    step("👉 Scanning results")
+
+    selectors = [
+
+        "table tbody tr",
+
+        "table tr",
+
+        ".trip",
+
+        ".result",
+
+        "div[class*='trip']",
+
+        "div[class*='result']",
+
+        ".card"
+
+    ]
+
+    rows = None
+
+    for sel in selectors:
+
+        loc = page.locator(sel)
+
+        if loc.count() > 0:
+
+            rows = loc
+
+            step(f"✔ Using selector: {sel}")
+
+            break
+
+    if rows is None:
+
+        step("❌ No results rendered")
+
+        step(page.inner_text("body")[:2000])
+
+        return "❌ NO RESULTS"
+
+    step(f"Rows found: {rows.count()}")
+
+    for i in range(rows.count()):
+
+        text = rows.nth(i).inner_text().lower()
+
+        times = re.findall(r"\b([01]\d|2[0-3]):[0-5]\d\b", text)
+
+        seats_match = re.search(r"available seats?\s*[:\-]?\s*(\d+)", text)
+
+        seats = int(seats_match.group(1)) if seats_match else 0
+
+        for t in times:
+
+            if in_window(t) and seats > 4:
+
+                return f"🚆 MATCH\nTime: {t}\nSeats: {seats}"
+
+    return "❌ No match"
+
+# ======================
+
+# MAIN
+
+# ======================
+
 def run():
 
     try:
 
-        send("🚀 KTMB diagnostic started")
+        step("🚀 BOT STARTED")
 
-        payload = {
+        with sync_playwright() as p:
 
-            "origin": "41",
+            browser = p.chromium.launch(headless=True)
 
-            "destination": "45",
+            page = browser.new_page()
 
-            "date": TRAVEL_DATE,
+            page.goto("https://online.ktmb.com.my")
 
-            "passengers": 1,
+            page.wait_for_timeout(8000)
 
-        }
+            try:
 
-        headers = {
+                page.click("text=Accept", timeout=3000)
 
-            "User-Agent": "Mozilla/5.0",
+            except Exception:
 
-            "Accept": "application/json, text/plain, */*",
+                pass
 
-            "Referer": "https://online.ktmb.com.my/",
+            try:
 
-        }
+                page.click("text=Book Ticket", timeout=5000)
 
-        r = requests.get(
+            except Exception:
 
-            SEARCH_URL,
+                pass
 
-            params=payload,
+            page.wait_for_timeout(5000)
 
-            headers=headers,
+            select_station(page, FROM_STATION, "Origin")
 
-            timeout=20,
+            select_station(page, TO_STATION, "Destination")
 
-        )
+            select_date(page)
 
-        msg = (
+            select_pax(page)
 
-            f"HTTP STATUS: {r.status_code}\n"
+            ok, reason = validate(page)
 
-            f"URL: {r.url}\n\n"
+            step(f"✔ VALIDATION: {reason}")
 
-        )
+            if not ok:
 
-        if r.status_code == 404:
+                send(f"❌ FORM INVALID: {reason}")
 
-            msg += (
+                browser.close()
 
-                "❌ The current script is using a guessed KTMB endpoint.\n"
+                return
 
-                "It is not a real public API endpoint.\n"
+            search(page)
 
-                "This repo cannot become a working tracker until the real browser request is captured."
+            result = scan(page)
 
-            )
+            send(result)
 
-        else:
+            browser.close()
 
-            msg += f"Response preview:\n{r.text[:800]}"
+    except Exception:
 
-        send(msg)
-
-    except Exception as e:
-
-        send(f"🔥 ERROR\n{str(e)}")
+        send("🔥 CRASH\n" + traceback.format_exc())
 
 run()
