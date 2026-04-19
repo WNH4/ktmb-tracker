@@ -115,7 +115,7 @@ def select_station(page, value, label):
 
 # ======================
 
-# DATE SELECT (DIRECT JS INJECT)
+# DATE SELECT
 
 # ======================
 
@@ -245,6 +245,18 @@ def search(page):
 
 # ======================
 
+# SAFE NUMBER PARSER
+
+# ======================
+
+def extract_first_int(text):
+
+    m = re.search(r"\d+", text.replace(",", ""))
+
+    return int(m.group()) if m else 0
+
+# ======================
+
 # SCAN RESULTS
 
 # ======================
@@ -253,29 +265,19 @@ def scan(page):
 
     step("👉 Scanning results")
 
-    selectors = [
+    row_selectors = [
 
         "table tbody tr",
 
         "table tr",
 
-        ".trip",
-
-        ".result",
-
-        "div[class*='trip']",
-
-        "div[class*='result']",
-
-        ".card",
-
-        ".row"
+        ".table tbody tr"
 
     ]
 
     rows = None
 
-    for sel in selectors:
+    for sel in row_selectors:
 
         loc = page.locator(sel)
 
@@ -297,27 +299,87 @@ def scan(page):
 
     step(f"Rows found: {rows.count()}")
 
+    debug_rows = []
+
     for i in range(rows.count()):
 
-        text = rows.nth(i).inner_text().lower()
+        row = rows.nth(i)
 
-        if "departure" in text and "arrival" in text:
+        cells = row.locator("td")
 
-            continue
+        # Preferred: parse by actual table columns
 
-        # FIXED: capture FULL time, not just hour
+        if cells.count() >= 6:
+
+            try:
+
+                service = cells.nth(0).inner_text().strip()
+
+                departure = cells.nth(1).inner_text().strip()
+
+                arrival = cells.nth(2).inner_text().strip()
+
+                seats_text = cells.nth(4).inner_text().strip()
+
+                fare = cells.nth(5).inner_text().strip()
+
+                seats = extract_first_int(seats_text)
+
+                debug_rows.append(
+
+                    f"{service} | dep={departure} | seats={seats} | fare={fare}"
+
+                )
+
+                if re.match(r"^\d{2}:\d{2}$", departure):
+
+                    if in_window(departure) and seats >= MIN_SEATS:
+
+                        return (
+
+                            f"🚆 MATCH\n"
+
+                            f"Service: {service}\n"
+
+                            f"Time: {departure}\n"
+
+                            f"Arrival: {arrival}\n"
+
+                            f"Seats: {seats}\n"
+
+                            f"Fare: {fare}"
+
+                        )
+
+            except Exception:
+
+                pass
+
+        # Fallback: regex parse row text
+
+        text = row.inner_text().lower()
 
         times = re.findall(r"\b((?:[01]\d|2[0-3]):[0-5]\d)\b", text)
 
-        seats_match = re.search(r"available seats?\s*[:\-]?\s*(\d+)", text)
+        numbers = [int(x) for x in re.findall(r"\b\d+\b", text)]
 
-        seats = int(seats_match.group(1)) if seats_match else 0
+        debug_rows.append(text[:150])
 
         for t in times:
+
+            # heuristically use largest number in row as seats candidate
+
+            seats = max(numbers) if numbers else 0
 
             if in_window(t) and seats >= MIN_SEATS:
 
                 return f"🚆 MATCH\nTime: {t}\nSeats: {seats}"
+
+    # debug summary to Telegram so you can see what bot read
+
+    if debug_rows:
+
+        step("📋 Parsed rows:\n" + "\n".join(debug_rows[:8]))
 
     return "❌ No match"
 
