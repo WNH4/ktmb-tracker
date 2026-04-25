@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 # ======================
 # CONFIG FROM WORKFLOW
 # ======================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8661868720:AAGtVrIZiQZHfXUnCWpYFtbWdKKR3TXn4I0")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 CHAT_ID = os.getenv("CHAT_ID", "-1003916125901")
 
 FROM_STATION = os.getenv("FROM_STATION", "JB SENTRAL")
@@ -27,6 +27,9 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 STATE_DIR = ".state"
 STATE_FILE = os.path.join(STATE_DIR, f"{MODE}_{TRAVEL_DATE}.json")
+
+if not BOT_TOKEN:
+    raise Exception("BOT_TOKEN not provided by workflow")
 
 if not TRAVEL_DATE:
     raise Exception("TRAVEL_DATE not provided by workflow")
@@ -296,8 +299,9 @@ def handle_open_check(result):
                 f"Date: {TRAVEL_DATE}\n"
                 f"Time: {result['departure']}\n"
                 f"Arrival: {result['arrival']}\n"
-                f"Seats shown: {result['seats']}\n"
-                f"Fare: {result['fare']}"
+                f"Public list seats shown: {result['seats']}\n"
+                f"Fare: {result['fare']}\n"
+                f"⚠️ Please login to confirm actual seat map availability"
             )
 
         state["opened"] = True
@@ -344,12 +348,13 @@ def handle_resale(result):
         if changed:
             send(
                 f"🚆 KTMB RETURN CHANGE DETECTED\n"
+                f"{FROM_STATION} → {TO_STATION}\n"
                 f"Date: {TRAVEL_DATE}\n"
                 f"Time: {current_departure}\n"
                 f"Arrival: {result['arrival']}\n"
-                f"Seats shown: {current_seats}\n"
+                f"Public list seats shown: {current_seats}\n"
                 f"Fare: {result['fare']}\n"
-                f"Status: list only, not login-confirmed"
+                f"⚠️ Please login to confirm actual seat map availability"
             )
 
         state["last_status"] = "MATCH"
@@ -369,6 +374,7 @@ def handle_resale(result):
         if changed:
             send(
                 f"❌ KTMB RETURN UPDATE\n"
+                f"{FROM_STATION} → {TO_STATION}\n"
                 f"Date: {TRAVEL_DATE}\n"
                 f"No tickets currently shown"
             )
