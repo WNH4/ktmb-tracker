@@ -9,8 +9,8 @@ from datetime import datetime, timezone, timedelta
 # ======================
 # CONFIG FROM WORKFLOW
 # ======================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8661868720:AAGoXKdncFwDCOsw_lqweIKvn3EXvGuokSM")
-CHAT_ID = os.getenv("CHAT_ID", "8240067274")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8661868720:AAGtVrIZiQZHfXUnCWpYFtbWdKKR3TXn4I0")
+CHAT_ID = os.getenv("CHAT_ID", "-1003916125901")
 
 FROM_STATION = os.getenv("FROM_STATION", "JB SENTRAL")
 TO_STATION = os.getenv("TO_STATION", "KLUANG")
