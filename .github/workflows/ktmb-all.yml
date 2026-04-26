@@ -2,9 +2,7 @@ name: ktmb all watchers
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "*/15 * * * *"
-
+  
 jobs:
   run-all:
     runs-on: ubuntu-latest
