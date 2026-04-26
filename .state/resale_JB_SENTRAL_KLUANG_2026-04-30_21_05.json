@@ -1,0 +1,10 @@
+{
+  "trips": {
+    "21:05": {
+      "arrival": "22:35",
+      "fare": "MYR 14.00",
+      "seats": 20,
+      "service": "Express - 26"
+    }
+  }
+}
