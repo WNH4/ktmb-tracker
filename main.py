@@ -20,13 +20,16 @@ TARGET_TIME = os.getenv("TARGET_TIME", "21:05")
 MODE = os.getenv("MODE", "resale")  # resale / open_check
 
 TIME_WINDOW_MIN = int(os.getenv("TIME_WINDOW_MIN", "15"))
-MIN_SEATS = int(os.getenv("MIN_SEATS", "5"))
+MIN_SEATS = int(os.getenv("MIN_SEATS", "1"))
 
 SALE_START_SGT = os.getenv("SALE_START_SGT", "")
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 STATE_DIR = ".state"
-STATE_FILE = os.path.join(STATE_DIR, f"{MODE}_{TRAVEL_DATE}.json")
+
+STATE_KEY = f"{MODE}_{FROM_STATION}_{TO_STATION}_{TRAVEL_DATE}_{TARGET_TIME}"
+STATE_KEY = re.sub(r"[^A-Za-z0-9_-]+", "_", STATE_KEY)
+STATE_FILE = os.path.join(STATE_DIR, f"{STATE_KEY}.json")
 
 if not BOT_TOKEN:
     raise Exception("BOT_TOKEN not provided by workflow")
@@ -35,9 +38,6 @@ if not TRAVEL_DATE:
     raise Exception("TRAVEL_DATE not provided by workflow")
 
 
-# ======================
-# TELEGRAM
-# ======================
 def send(msg):
     try:
         requests.post(
@@ -58,9 +58,6 @@ def log(msg):
     print(msg)
 
 
-# ======================
-# HELPERS
-# ======================
 def in_window(t):
     fmt = "%H:%M"
     a = datetime.strptime(t, fmt)
@@ -93,9 +90,6 @@ def extract_first_int(text):
     return int(m.group()) if m else 0
 
 
-# ======================
-# STATE
-# ======================
 def load_state():
     try:
         with open(STATE_FILE, "r", encoding="utf-8") as f:
@@ -110,9 +104,6 @@ def save_state(data):
         json.dump(data, f, indent=2, sort_keys=True)
 
 
-# ======================
-# UI INPUTS
-# ======================
 def select_station(page, value, label):
     log(f"Selecting {label}")
 
@@ -133,8 +124,6 @@ def select_station(page, value, label):
 
 
 def select_date(page):
-    log("Setting date")
-
     d = get_date_parts()
     date_str = f"{d['day']} {d['month']} {d['year']}"
 
@@ -154,8 +143,6 @@ def select_date(page):
 
 
 def select_pax(page):
-    log("Selecting pax")
-
     try:
         page.click("text=Pax")
         page.wait_for_timeout(500)
@@ -182,8 +169,6 @@ def validate(page):
 
 
 def search(page):
-    log("Clicking search")
-
     btn = page.locator("button:has-text('Search')")
     btn.scroll_into_view_if_needed()
     page.wait_for_timeout(800)
@@ -193,9 +178,6 @@ def search(page):
     page.wait_for_timeout(10000)
 
 
-# ======================
-# SCAN RESULTS
-# ======================
 def scan(page):
     row_selectors = [
         "table tbody tr",
@@ -231,7 +213,11 @@ def scan(page):
 
                 seats = extract_first_int(seats_text)
 
-                if re.match(r"^\d{2}:\d{2}$", departure) and in_window(departure):
+                if (
+                    re.match(r"^\d{2}:\d{2}$", departure)
+                    and in_window(departure)
+                    and seats >= MIN_SEATS
+                ):
                     matches.append({
                         "service": service,
                         "departure": departure,
@@ -259,19 +245,21 @@ def scan(page):
             "fare": best["fare"]
         }
 
+    trips = {}
+    for m in matches:
+        trips[m["departure"]] = {
+            "service": m["service"],
+            "arrival": m["arrival"],
+            "seats": m["seats"],
+            "fare": m["fare"]
+        }
+
     return {
         "status": "MATCH",
-        "service": best["service"],
-        "departure": best["departure"],
-        "arrival": best["arrival"],
-        "seats": best["seats"],
-        "fare": best["fare"]
+        "trips": trips
     }
 
 
-# ======================
-# NOTIFICATION LOGIC
-# ======================
 def handle_open_check(result):
     if not open_check_active_now():
         debug_send(
@@ -285,13 +273,6 @@ def handle_open_check(result):
     previously_open = state.get("opened", False)
 
     if result["status"] == "OPENED":
-        debug_send(
-            f"DEBUG open_check result\n"
-            f"Date: {TRAVEL_DATE}\n"
-            f"Time: {result['departure']}\n"
-            f"Previously open: {previously_open}"
-        )
-
         if not previously_open:
             send(
                 f"🎉 KTMB TICKET OPENED\n"
@@ -308,13 +289,6 @@ def handle_open_check(result):
         state["last_departure"] = result["departure"]
 
     else:
-        debug_send(
-            f"⏳ Not open for target window\n"
-            f"{FROM_STATION} → {TO_STATION}\n"
-            f"Date: {TRAVEL_DATE}\n"
-            f"Target: {TARGET_TIME} ± {TIME_WINDOW_MIN} min"
-        )
-
         state["opened"] = False
         state["last_departure"] = None
 
@@ -323,72 +297,57 @@ def handle_open_check(result):
 
 def handle_resale(result):
     state = load_state()
-    last_seats = state.get("last_seats")
-    last_departure = state.get("last_departure")
-    last_status = state.get("last_status")
 
-    if result["status"] == "MATCH":
-        current_seats = result["seats"]
-        current_departure = result["departure"]
+    if result["status"] != "MATCH":
+        previous = state.get("trips", {})
 
-        changed = (
-            last_status != "MATCH"
-            or last_seats != current_seats
-            or last_departure != current_departure
-        )
-
-        debug_send(
-            f"DEBUG resale result\n"
-            f"Date: {TRAVEL_DATE}\n"
-            f"Time: {current_departure}\n"
-            f"Seats: {current_seats}\n"
-            f"Changed: {changed}"
-        )
-
-        if changed:
-            send(
-                f"🚆 KTMB RETURN CHANGE DETECTED\n"
-                f"{FROM_STATION} → {TO_STATION}\n"
-                f"Date: {TRAVEL_DATE}\n"
-                f"Time: {current_departure}\n"
-                f"Arrival: {result['arrival']}\n"
-                f"Public list seats shown: {current_seats}\n"
-                f"Fare: {result['fare']}\n"
-                f"⚠️ Please login to confirm actual seat map availability"
-            )
-
-        state["last_status"] = "MATCH"
-        state["last_seats"] = current_seats
-        state["last_departure"] = current_departure
-
-    else:
-        changed = last_status != "NO_MATCH"
-
-        debug_send(
-            f"❌ No target-window tickets shown\n"
-            f"Date: {TRAVEL_DATE}\n"
-            f"Target: {TARGET_TIME} ± {TIME_WINDOW_MIN} min\n"
-            f"Changed: {changed}"
-        )
-
-        if changed:
+        if previous:
             send(
                 f"❌ KTMB RETURN UPDATE\n"
                 f"{FROM_STATION} → {TO_STATION}\n"
                 f"Date: {TRAVEL_DATE}\n"
-                f"No tickets currently shown"
+                f"No target-window tickets currently shown"
             )
 
-        state["last_status"] = "NO_MATCH"
-        state["last_seats"] = None
-        state["last_departure"] = None
+        state["trips"] = {}
+        save_state(state)
+        return
 
+    current_trips = result.get("trips", {})
+    previous_trips = state.get("trips", {})
+
+    changes = []
+
+    for dep, info in current_trips.items():
+        old = previous_trips.get(dep)
+
+        if old is None:
+            changes.append(
+                f"🆕 New trip {dep} → {info['arrival']} | seats {info['seats']} | {info['fare']}"
+            )
+        elif old.get("seats") != info["seats"]:
+            changes.append(
+                f"🔄 Seat change {dep}: {old.get('seats')} → {info['seats']} | {info['fare']}"
+            )
+
+    for dep in previous_trips:
+        if dep not in current_trips:
+            changes.append(f"❌ Trip disappeared {dep}")
+
+    if changes:
+        send(
+            f"🚆 KTMB RETURN CHANGE DETECTED\n"
+            f"{FROM_STATION} → {TO_STATION}\n"
+            f"Date: {TRAVEL_DATE}\n"
+            f"Window: {TARGET_TIME} ± {TIME_WINDOW_MIN} min\n\n"
+            + "\n".join(changes)
+            + "\n\n⚠️ Please login to confirm actual seat map availability"
+        )
+
+    state["trips"] = current_trips
     save_state(state)
 
 
-# ======================
-# MAIN
-# ======================
 def run():
     try:
         debug_send(
