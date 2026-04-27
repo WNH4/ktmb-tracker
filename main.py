@@ -348,6 +348,36 @@ def handle_resale(result):
     save_state(state)
 
 
+def load_ktmb(page, browser):
+    goto_success = False
+
+    for attempt in range(3):
+        try:
+            page.goto(
+                "https://online.ktmb.com.my",
+                wait_until="domcontentloaded",
+                timeout=60000
+            )
+            goto_success = True
+            break
+        except Exception as e:
+            log(f"KTMB load failed attempt {attempt + 1}: {e}")
+            page.wait_for_timeout(5000)
+
+    if not goto_success:
+        send(
+            f"⚠️ KTMB SITE LOAD FAILED\n"
+            f"{FROM_STATION} → {TO_STATION}\n"
+            f"Date: {TRAVEL_DATE}\n"
+            f"Will retry next cron run."
+        )
+        browser.close()
+        return False
+
+    page.wait_for_timeout(8000)
+    return True
+
+
 def run():
     try:
         debug_send(
@@ -361,8 +391,8 @@ def run():
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            page.goto("https://online.ktmb.com.my")
-            page.wait_for_timeout(8000)
+            if not load_ktmb(page, browser):
+                return
 
             try:
                 page.click("text=Accept", timeout=3000)
