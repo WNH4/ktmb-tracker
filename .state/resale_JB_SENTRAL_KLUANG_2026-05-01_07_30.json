@@ -1,3 +1,10 @@
 {
-  "trips": {}
+  "trips": {
+    "07:35": {
+      "arrival": "08:37",
+      "fare": "MYR 21.00",
+      "seats": 1,
+      "service": "Gold - 9442"
+    }
+  }
 }
