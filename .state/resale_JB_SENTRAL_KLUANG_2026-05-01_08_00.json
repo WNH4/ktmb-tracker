@@ -1,11 +1,5 @@
 {
   "trips": {
-    "07:35": {
-      "arrival": "08:37",
-      "fare": "MYR 21.00",
-      "seats": 1,
-      "service": "Gold - 9442"
-    },
     "08:40": {
       "arrival": "09:32",
       "fare": "MYR 28.00",
