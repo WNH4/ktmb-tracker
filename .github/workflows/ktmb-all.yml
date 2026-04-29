@@ -58,20 +58,6 @@ jobs:
           DEBUG: "false"
         run: python main.py
 
-      - name: Run JB to Kluang 1 May morning watcher
-        env:
-          BOT_TOKEN: "8661868720:AAEn1Yw3YhcGyWQU21WGempIMHdh9y8avsM"
-          CHAT_ID: "-1003916125901"
-          FROM_STATION: "JB SENTRAL"
-          TO_STATION: "KLUANG"
-          TRAVEL_DATE: "2026-05-01"
-          TARGET_TIME: "08:00"
-          MODE: "resale"
-          TIME_WINDOW_MIN: "65"
-          MIN_SEATS: "1"
-          DEBUG: "false"
-        run: python main.py
-
       - name: Commit state
         run: |
           git config user.name "github-actions"
