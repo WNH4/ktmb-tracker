@@ -5,6 +5,12 @@
       "fare": "MYR 21.00",
       "seats": 1,
       "service": "Gold - 9442"
+    },
+    "08:40": {
+      "arrival": "09:32",
+      "fare": "MYR 28.00",
+      "seats": 4,
+      "service": "Platinum - 9524"
     }
   }
 }
