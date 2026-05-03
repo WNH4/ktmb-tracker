@@ -2,7 +2,7 @@ name: ktmb all watchers
 
 on:
   workflow_dispatch:
-  
+
 jobs:
   run-all:
     runs-on: ubuntu-latest
@@ -19,6 +19,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+          cache: "pip"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}
 
       - name: Install dependencies
         run: |
@@ -55,6 +62,20 @@ jobs:
           TIME_WINDOW_MIN: "15"
           MIN_SEATS: "1"
           SALE_START_SGT: ""
+          DEBUG: "false"
+        run: python main.py
+
+      - name: Run return watcher Kluang to JB 1 Jun
+        env:
+          BOT_TOKEN: "8661868720:AAEn1Yw3YhcGyWQU21WGempIMHdh9y8avsM"
+          CHAT_ID: "-1003916125901"
+          FROM_STATION: "KLUANG"
+          TO_STATION: "JB SENTRAL"
+          TRAVEL_DATE: "2026-06-01"
+          TARGET_TIME: "11:30"
+          MODE: "resale"
+          TIME_WINDOW_MIN: "20"
+          MIN_SEATS: "1"
           DEBUG: "false"
         run: python main.py
 
