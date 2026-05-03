@@ -31,6 +31,8 @@ STATE_KEY = f"{MODE}_{FROM_STATION}_{TO_STATION}_{TRAVEL_DATE}_{TARGET_TIME}"
 STATE_KEY = re.sub(r"[^A-Za-z0-9_-]+", "_", STATE_KEY)
 STATE_FILE = os.path.join(STATE_DIR, f"{STATE_KEY}.json")
 
+FAILED_FLAG_FILE = os.path.join(STATE_DIR, "site_failed.flag")
+
 if not BOT_TOKEN:
     raise Exception("BOT_TOKEN not provided by workflow")
 
@@ -365,14 +367,23 @@ def load_ktmb(page, browser):
             page.wait_for_timeout(5000)
 
     if not goto_success:
-        send(
-            f"⚠️ KTMB SITE LOAD FAILED\n"
-            f"{FROM_STATION} → {TO_STATION}\n"
-            f"Date: {TRAVEL_DATE}\n"
-            f"Will retry next cron run."
-        )
+        os.makedirs(STATE_DIR, exist_ok=True)
+
+        already_alerted = os.path.exists(FAILED_FLAG_FILE)
+
+        if not already_alerted:
+            send(
+                "⚠️ KTMB SITE DOWN / SLOW\n"
+                "All watchers skipped this run\n"
+                "Will retry automatically"
+            )
+            open(FAILED_FLAG_FILE, "w").close()
+
         browser.close()
         return False
+
+    if os.path.exists(FAILED_FLAG_FILE):
+        os.remove(FAILED_FLAG_FILE)
 
     page.wait_for_timeout(8000)
     return True
