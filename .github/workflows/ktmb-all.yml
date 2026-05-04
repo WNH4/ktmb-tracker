@@ -3,6 +3,10 @@ name: ktmb all watchers
 on:
   workflow_dispatch:
 
+concurrency:
+  group: ktmb-all-watchers
+  cancel-in-progress: false
+
 jobs:
   run-all:
     runs-on: ubuntu-latest
@@ -14,6 +18,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: true
+
+      - name: Pull latest state
+        run: git pull origin main || true
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -73,6 +80,20 @@ jobs:
           TO_STATION: "JB SENTRAL"
           TRAVEL_DATE: "2026-06-01"
           TARGET_TIME: "11:30"
+          MODE: "resale"
+          TIME_WINDOW_MIN: "20"
+          MIN_SEATS: "1"
+          DEBUG: "false"
+        run: python main.py
+
+      - name: Run return watcher Kluang to JB 10 May evening
+        env:
+          BOT_TOKEN: "8661868720:AAEn1Yw3YhcGyWQU21WGempIMHdh9y8avsM"
+          CHAT_ID: "-1003916125901"
+          FROM_STATION: "KLUANG"
+          TO_STATION: "JB SENTRAL"
+          TRAVEL_DATE: "2026-05-10"
+          TARGET_TIME: "18:40"
           MODE: "resale"
           TIME_WINDOW_MIN: "20"
           MIN_SEATS: "1"
