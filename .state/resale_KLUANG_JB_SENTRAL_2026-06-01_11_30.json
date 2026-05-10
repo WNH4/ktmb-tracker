@@ -1,10 +1,3 @@
 {
-  "trips": {
-    "11:20": {
-      "arrival": "12:15",
-      "fare": "MYR 25.00",
-      "seats": 4,
-      "service": "Platinum - 9523"
-    }
-  }
+  "trips": {}
 }
